@@ -16,6 +16,7 @@ query GetRoles($searchQueryInput: RoleSearchQueryInput!) {
     totalCount
     items {
       roleId
+      corporateTitle
       jobTitle
       jobFunction
       locations {
@@ -131,7 +132,7 @@ class GoldmanSachsScraper(ApiScraper):
         return ScraperJobData(
             url=clean_job_url(JOB_URL_TEMPLATE.format(source_id=source_id)),
             official_id=str(source_id),
-            title=clean_text(item.get('jobTitle')),
+            title=clean_text(item.get('corporateTitle')),
             company_name=COMPANY_NAME,
             location=clean_text(_build_location_text(item.get('locations') or [])),
             extra={'source_id': source_id},
