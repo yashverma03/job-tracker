@@ -1,6 +1,6 @@
 from abc import abstractmethod
 
-from common.utils.http import get_with_retry
+from common.utils.http import get_with_retry, post_with_retry
 from modules.scraper.base.base_scraper import BaseScraper
 from modules.scraper.constants import REQUEST_TIMEOUT_SECONDS
 from modules.scraper.types import ListingPage, ScraperJobData
@@ -27,6 +27,24 @@ class ApiScraper(BaseScraper):
     def _request(self, url: str, **kwargs):
         kwargs.setdefault('timeout', REQUEST_TIMEOUT_SECONDS)
         return get_with_retry(lambda: self._session, url, **kwargs)
+
+    @property
+    def list_http_method(self) -> str:
+        """HTTP method for the list endpoint - 'GET' (default, params as query string)
+        or 'POST' (params as the JSON body), for APIs like GraphQL gateways that only
+        accept POST. Override per scraper; the request/pagination plumbing below
+        adapts automatically, no need to override `_fetch_listing_page` for this."""
+        return 'GET'
+
+    @property
+    def detail_http_method(self) -> str:
+        """Same as `list_http_method`, for the detail endpoint."""
+        return 'GET'
+
+    def _request_with_method(self, method: str, url: str, params: dict):
+        if method == 'POST':
+            return post_with_retry(lambda: self._session, url, json=params, timeout=REQUEST_TIMEOUT_SECONDS)
+        return self._request(url, params=params)
 
     def _parse_json(self, response) -> dict:
         try:
@@ -71,7 +89,7 @@ class ApiScraper(BaseScraper):
         the listing (typically just `description`)."""
 
     def _fetch_listing_page(self, start: int, _time_range_hours: int) -> ListingPage:
-        response = self._request(self.list_url, params=self.build_list_params(start))
+        response = self._request_with_method(self.list_http_method, self.list_url, self.build_list_params(start))
         response.raise_for_status()
         items = self.parse_list_items(self._parse_json(response))
 
@@ -88,6 +106,8 @@ class ApiScraper(BaseScraper):
         return ListingPage(listings=listings)
 
     def _fetch_detail_fields(self, listing: ScraperJobData) -> dict:
-        response = self._request(self.detail_url, params=self.build_detail_params(listing))
+        response = self._request_with_method(
+            self.detail_http_method, self.detail_url, self.build_detail_params(listing)
+        )
         response.raise_for_status()
         return self.parse_detail_fields(self._parse_json(response))
