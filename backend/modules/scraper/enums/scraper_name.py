@@ -14,3 +14,4 @@ class ScraperName(models.TextChoices):
     CISCO = 'Cisco', 'Cisco'
     WELLFOUND = 'Wellfound', 'Wellfound'
     GOLDMAN_SACHS = 'Goldman Sachs', 'Goldman Sachs'
+    BARCLAYS = 'Barclays', 'Barclays'
