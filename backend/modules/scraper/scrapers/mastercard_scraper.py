@@ -6,7 +6,6 @@ WORKDAY_HOST = 'mastercard.wd1.myworkdayjobs.com'
 TENANT = 'mastercard'
 SITE = 'CorporateCareers'
 COMPANY_NAME = 'Mastercard'
-PAGE_SIZE = 20
 
 APPLIED_FACETS = {
     'jobFamilyGroup': ['189119ebe266100103737c3d6a6e0000'],  # Engineering
@@ -19,10 +18,6 @@ class MastercardScraper(WorkdayScraper):
     @property
     def name(self) -> ScraperName:
         return ScraperName.MASTERCARD
-
-    @property
-    def page_size(self) -> int:
-        return PAGE_SIZE
 
     @property
     def workday_host(self) -> str:

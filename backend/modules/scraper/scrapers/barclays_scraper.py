@@ -6,7 +6,6 @@ WORKDAY_HOST = 'barclays.wd3.myworkdayjobs.com'
 TENANT = 'barclays'
 SITE = 'External_Career_Site_Barclays'
 COMPANY_NAME = 'Barclays'
-PAGE_SIZE = 20
 
 APPLIED_FACETS = {
     'jobFamilyGroup': ['112c054282011001e9162cfccdc10000'],  # Technology
@@ -29,10 +28,6 @@ class BarclaysScraper(WorkdayScraper):
     @property
     def name(self) -> ScraperName:
         return ScraperName.BARCLAYS
-
-    @property
-    def page_size(self) -> int:
-        return PAGE_SIZE
 
     @property
     def workday_host(self) -> str:

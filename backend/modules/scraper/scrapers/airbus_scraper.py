@@ -6,7 +6,6 @@ WORKDAY_HOST = 'ag.wd3.myworkdayjobs.com'
 TENANT = 'ag'
 SITE = 'Airbus'
 COMPANY_NAME = 'Airbus'
-PAGE_SIZE = 20
 
 APPLIED_FACETS = {
     'locationCountry': ['c4f78be1a8f14da0ab49ce1162348a5e'],  # India
@@ -31,10 +30,6 @@ class AirbusScraper(WorkdayScraper):
     @property
     def name(self) -> ScraperName:
         return ScraperName.AIRBUS
-
-    @property
-    def page_size(self) -> int:
-        return PAGE_SIZE
 
     @property
     def workday_host(self) -> str:

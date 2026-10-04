@@ -6,7 +6,6 @@ WORKDAY_HOST = 'adobe.wd5.myworkdayjobs.com'
 TENANT = 'adobe'
 SITE = 'external_experienced'
 COMPANY_NAME = 'Adobe'
-PAGE_SIZE = 20
 
 APPLIED_FACETS = {
     'jobFamilyGroup': ['591af8b812fa10737af39db3d96eed9f'],  # Engineering
@@ -21,10 +20,6 @@ class AdobeScraper(WorkdayScraper):
     @property
     def name(self) -> ScraperName:
         return ScraperName.ADOBE
-
-    @property
-    def page_size(self) -> int:
-        return PAGE_SIZE
 
     @property
     def workday_host(self) -> str:

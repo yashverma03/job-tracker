@@ -47,6 +47,10 @@ class WorkdayScraper(ApiScraper):
         return ''
 
     @property
+    def page_size(self) -> int:
+        return 20
+
+    @property
     def list_url(self) -> str:
         return f'https://{self.workday_host}/wday/cxs/{self.tenant}/{self.site}/jobs'
 

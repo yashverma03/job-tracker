@@ -6,7 +6,6 @@ WORKDAY_HOST = 'cisco.wd5.myworkdayjobs.com'
 TENANT = 'cisco'
 SITE = 'Cisco_Careers'
 COMPANY_NAME = 'Cisco'
-PAGE_SIZE = 20
 
 APPLIED_FACETS = {
     'jobFamilyGroup': [
@@ -32,10 +31,6 @@ class CiscoScraper(WorkdayScraper):
     @property
     def name(self) -> ScraperName:
         return ScraperName.CISCO
-
-    @property
-    def page_size(self) -> int:
-        return PAGE_SIZE
 
     @property
     def workday_host(self) -> str:
