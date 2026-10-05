@@ -145,6 +145,14 @@ class RadancyScraper(ApiScraper):
             except (TypeError, ValueError):
                 continue
             if data.get('@type') == 'JobPosting':
-                return {'description': clean_text(data.get('description'))}
+                fields = {'description': clean_text(data.get('description'))}
+                # `identifier` is this tenant's own requisition/job ID (shown on the
+                # page as "Req Id" on some tenants) - the real stable ID for dedup,
+                # as opposed to the numeric ID in the list/detail URL, which is an
+                # internal Radancy posting ID and not what the employer calls the job.
+                identifier = data.get('identifier')
+                if identifier:
+                    fields['official_id'] = str(identifier).strip()
+                return fields
 
         return {'description': None}
