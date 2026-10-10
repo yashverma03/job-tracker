@@ -146,11 +146,11 @@ class RadancyScraper(ApiScraper):
                 continue
             if data.get('@type') == 'JobPosting':
                 fields = {'description': clean_text(data.get('description'))}
-                # `identifier` is this tenant's own requisition/job ID (shown on the
-                # page as "Req Id" on some tenants) - the real stable ID for dedup,
-                # as opposed to the numeric ID in the list/detail URL, which is an
-                # internal Radancy posting ID and not what the employer calls the job.
+                # The page's own Job ID - the employer-facing identifier, as opposed to
+                # the URL's numeric ID, which is Radancy's internal posting ID. Rendered
+                # as a bare string on some tenants, a PropertyValue object on others.
                 identifier = data.get('identifier')
+                identifier = identifier.get('value') if isinstance(identifier, dict) else identifier
                 if identifier:
                     fields['official_id'] = str(identifier).strip()
                 return fields
