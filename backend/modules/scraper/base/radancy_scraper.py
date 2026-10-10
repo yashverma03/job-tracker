@@ -121,9 +121,10 @@ class RadancyScraper(ApiScraper):
             self._record_error(None, f'missing job id or href: {item}')
             return None
 
+        # job_id is Radancy's internal posting ID, not the real Job ID - only used for
+        # the URL. official_id comes from the detail page (see parse_detail_fields).
         return ScraperJobData(
             url=clean_job_url(f'https://{self.host}{href}'),
-            official_id=str(job_id),
             title=clean_text(item.get('title')),
             company_name=self.company_name,
             location=clean_text(item.get('location')),
