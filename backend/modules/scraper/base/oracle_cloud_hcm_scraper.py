@@ -71,6 +71,12 @@ class OracleCloudHcmScraper(ApiScraper):
         return None
 
     @property
+    def selected_titles_facet(self) -> str | None:
+        """Value for the finder's `selectedTitlesFacet` filter (job-title grouping,
+        e.g. 'ENG' for Engineering). `None` omits it."""
+        return None
+
+    @property
     def selected_posting_dates_facet(self) -> str | None:
         """Value for the finder's `selectedPostingDatesFacet` filter. `None` omits it."""
         return None
@@ -102,6 +108,8 @@ class OracleCloudHcmScraper(ApiScraper):
             parts.append(f'selectedLocationsFacet={self.selected_locations_facet}')
         if self.selected_categories_facet is not None:
             parts.append(f'selectedCategoriesFacet={self.selected_categories_facet}')
+        if self.selected_titles_facet is not None:
+            parts.append(f'selectedTitlesFacet={self.selected_titles_facet}')
         if self.selected_posting_dates_facet is not None:
             parts.append(f'selectedPostingDatesFacet={self.selected_posting_dates_facet}')
         parts.append(f'sortBy={SORT_BY}')
