@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from datetime import datetime, timedelta, timezone
 
 from modules.jobs.utils.url_cleaner import clean_job_url
 from modules.scraper.base.api_scraper import ApiScraper
@@ -9,8 +10,10 @@ LIST_URL = 'https://api.smartrecruiters.com/v1/companies/{identifier}/postings'
 DETAIL_URL_TEMPLATE = 'https://api.smartrecruiters.com/v1/companies/{identifier}/postings/{posting_id}'
 JOB_URL_TEMPLATE = 'https://jobs.smartrecruiters.com/{identifier}/{posting_id}'
 PAGE_SIZE = 100
+COUNTRY = 'in'
+RELEASED_AFTER_WINDOW = timedelta(days=7)
 
-DESCRIPTION_SECTIONS = ('jobDescription', 'qualifications', 'additionalInformation', 'companyDescription')
+DESCRIPTION_SECTIONS = ('jobDescription', 'qualifications', 'additionalInformation')
 
 
 class SmartRecruitersScraper(ApiScraper):
@@ -36,11 +39,13 @@ class SmartRecruitersScraper(ApiScraper):
 
     @property
     def search_params(self) -> dict:
-        """This company's fixed search query params (e.g. `q` for a keyword query,
-        `country`) - everything except `limit`/`offset`, which are filled in per-page
-        below. Empty by default since SmartRecruiters' own facet filters (department,
-        function, etc.) aren't exposed as stable query params the way `q`/`country`
-        are - override to scope the search further per company."""
+        """This company's extra search query params on top of the fixed ones
+        `build_list_params` always sends (`country`, `releasedAfter`, `limit`,
+        `offset`) - e.g. `q` for a keyword query, or `custom_field.<FIELD_ID>` set to
+        a list of value ids to filter by one of this tenant's own custom fields (each
+        company defines its own field/value ids; a value of type list is sent as a
+        repeated query param, which the API treats as OR). Empty by default - override
+        to scope the search further per company."""
         return {}
 
     @property
@@ -58,7 +63,14 @@ class SmartRecruitersScraper(ApiScraper):
         return self.detail_url_template
 
     def build_list_params(self, start: int) -> dict:
-        return {**self.search_params, 'limit': self.page_size, 'offset': start}
+        released_after = (datetime.now(timezone.utc) - RELEASED_AFTER_WINDOW).strftime('%Y-%m-%dT%H:%M:%SZ')
+        return {
+            **self.search_params,
+            'limit': self.page_size,
+            'offset': start,
+            'country': COUNTRY,
+            'releasedAfter': released_after,
+        }
 
     def parse_list_items(self, response_json: dict) -> list[dict]:
         return response_json.get('content') or []
