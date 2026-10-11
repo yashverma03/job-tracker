@@ -6,7 +6,6 @@ HOST = 'eeho.fa.us2.oraclecloud.com'
 SITE_NUMBER = 'CX_45001'
 COMPANY_NAME = 'Oracle'
 JOB_URL_TEMPLATE = 'https://careers.oracle.com/en/sites/jobsearch/job/{job_id}'
-PAGE_SIZE = 14
 
 SELECTED_FLEX_FIELDS_FACETS = 'AttributeChar4|Employee||AttributeChar29|Individual Contributor||AttributeChar6|3 to 5+ years'
 SELECTED_LOCATIONS_FACET = '300000000106947'
@@ -18,10 +17,6 @@ class OracleScraper(OracleCloudHcmScraper):
     @property
     def name(self) -> ScraperName:
         return ScraperName.ORACLE
-
-    @property
-    def page_size(self) -> int:
-        return PAGE_SIZE
 
     @property
     def host(self) -> str:

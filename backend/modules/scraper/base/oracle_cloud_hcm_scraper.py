@@ -53,6 +53,10 @@ class OracleCloudHcmScraper(ApiScraper):
         'https://careers.oracle.com/en/sites/jobsearch/job/{job_id}'."""
 
     @property
+    def page_size(self) -> int:
+        return 200
+
+    @property
     def selected_flex_fields_facets(self) -> str | None:
         """Raw value for the finder's `selectedFlexFieldsFacets` filter (tenant-defined
         custom fields, e.g. employment type / seniority) - override to scope the search

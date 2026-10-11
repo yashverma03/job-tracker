@@ -19,3 +19,5 @@ class ScraperName(models.TextChoices):
     CITI = 'Citi', 'Citi'
     AKAMAI = 'Akamai', 'Akamai'
     INTUIT = 'Intuit', 'Intuit'
+    PHONEPE = 'PhonePe', 'PhonePe'
+    AMERICAN_EXPRESS = 'American Express', 'American Express'

@@ -94,3 +94,11 @@ frontend/
 - **Add/change how data is fetched or mutated on the frontend** → `frontend/src/modules/jobs/hooks/`
 - **Add a reusable UI primitive** → `frontend/src/common/components/`
 - **Add a new feature area** (beyond "jobs")** → mirror the `modules/jobs/` structure on both backend and frontend
+
+## Code Comments
+
+Comments are the exception, not the default. Do not comment every line, obvious code, or simple statements.
+
+Only add a comment when the code itself can't explain it — e.g. a non-obvious decision, a tricky edge case, a workaround, or a "why" that requires reasoning to figure out. If a reader could infer it from well-named code, skip the comment.
+
+When a comment is warranted, keep it short (one line, to the point) and phrase it as part of the code's own explanation — never paste in task/prompt instructions or reference the current change ("added for X fix", "per user request").
