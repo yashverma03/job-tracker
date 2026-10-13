@@ -21,3 +21,4 @@ class ScraperName(models.TextChoices):
     INTUIT = 'Intuit', 'Intuit'
     PHONEPE = 'PhonePe', 'PhonePe'
     AMERICAN_EXPRESS = 'American Express', 'American Express'
+    REDHAT = 'RedHat', 'RedHat'
