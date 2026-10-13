@@ -22,3 +22,4 @@ class ScraperName(models.TextChoices):
     PHONEPE = 'PhonePe', 'PhonePe'
     AMERICAN_EXPRESS = 'American Express', 'American Express'
     REDHAT = 'RedHat', 'RedHat'
+    PAYTM = 'Paytm', 'Paytm'

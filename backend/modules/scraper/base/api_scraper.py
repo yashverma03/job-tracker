@@ -41,9 +41,18 @@ class ApiScraper(BaseScraper):
         """Same as `list_http_method`, for the detail endpoint."""
         return 'GET'
 
+    @property
+    def post_body_format(self) -> str:
+        """How a POST request's params dict is sent - 'json' (default body) or 'form'
+        (url-encoded body), for APIs that reject a JSON body on their POST endpoint."""
+        return 'json'
+
     def _request_with_method(self, method: str, url: str, params: dict):
         if method == 'POST':
-            return post_with_retry(lambda: self._session, url, json=params, timeout=REQUEST_TIMEOUT_SECONDS)
+            body_kwarg = 'json' if self.post_body_format == 'json' else 'data'
+            return post_with_retry(
+                lambda: self._session, url, timeout=REQUEST_TIMEOUT_SECONDS, **{body_kwarg: params}
+            )
         return self._request(url, params=params)
 
     def _parse_json(self, response) -> dict:
