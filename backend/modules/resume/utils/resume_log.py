@@ -11,8 +11,12 @@ def _write(line: str) -> None:
 
 def log_resume_progress(index: int, total: int, outcome: ResumeGenerationOutcome) -> None:
     timestamp = datetime.now().isoformat(sep=' ', timespec='seconds')
-    status = 'success' if outcome.file_path is not None else 'failed'
-    detail = outcome.file_path if outcome.file_path is not None else outcome.error
+    if outcome.file_path is None:
+        status, detail = 'failed', outcome.error
+    elif outcome.reason is not None:
+        status, detail = 'skipped', f'{outcome.file_path} ({outcome.reason})'
+    else:
+        status, detail = 'success', outcome.file_path
     _write(
         f'[{timestamp}] job {index} of {total} done — job_id={outcome.job_id} status={status} detail={detail}',
     )

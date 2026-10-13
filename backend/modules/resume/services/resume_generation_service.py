@@ -1,4 +1,5 @@
 import os
+import shutil
 
 from django_q.models import Task
 from django_q.tasks import async_task
@@ -12,7 +13,9 @@ from modules.jobs.types.job_types import JobFilterParams
 from modules.ai.services.resume_ai_service import generate_resume_content
 from modules.resume.services.resume_pdf_service import render_resume_pdf
 from modules.resume.types.resume_types import ResumeGenerationOutcome, ResumeInput
+from modules.resume.utils.resume_constants import DEFAULT_RESUME_PATH, MIN_JOB_DESCRIPTION_LENGTH_FOR_AI
 from modules.resume.utils.resume_input_loader import load_resume_input
+from modules.resume.utils.text_cleaner import clean_job_description
 
 RESUME_BATCH_TASK_GROUP = 'resume_generation_batch'
 MAX_ELIGIBLE_JOBS = 10000
@@ -39,17 +42,31 @@ def _batch_in_progress() -> bool:
     return Task.objects.filter(group=RESUME_BATCH_TASK_GROUP, stopped__isnull=True).exists()
 
 
+def _mark_resume_generated(job: Job) -> None:
+    job.is_custom_resume_generated = True
+    job.save(update_fields=['is_custom_resume_generated'])
+
+
 def process_job(job: Job, resume_input: ResumeInput, output_dir: str) -> ResumeGenerationOutcome:
+    file_path = os.path.join(output_dir, _resume_filename(resume_input, job.pk))
+
+    if len(clean_job_description(job.description or '')) < MIN_JOB_DESCRIPTION_LENGTH_FOR_AI:
+        os.makedirs(output_dir, exist_ok=True)
+        shutil.copyfile(DEFAULT_RESUME_PATH, file_path)
+        _mark_resume_generated(job)
+        return ResumeGenerationOutcome(
+            job_id=job.pk,
+            file_path=file_path,
+            reason='Job description too short to tailor; used default resume.',
+        )
+
     last_error: Exception | None = None
 
     for attempt in range(1, MAX_RESUME_GENERATION_ATTEMPTS + 1):
         try:
             ai_output = generate_resume_content(job.title or '', job.description or '', resume_input)
-            file_path = os.path.join(output_dir, _resume_filename(resume_input, job.pk))
             render_resume_pdf(resume_input, ai_output, file_path)
-
-            job.is_custom_resume_generated = True
-            job.save(update_fields=['is_custom_resume_generated'])
+            _mark_resume_generated(job)
 
             return ResumeGenerationOutcome(job_id=job.pk, file_path=file_path)
         except Exception as exc:  # noqa: BLE001 - one job's failure must not abort the batch
