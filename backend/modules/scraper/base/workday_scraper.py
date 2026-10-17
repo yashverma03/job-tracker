@@ -108,7 +108,7 @@ class WorkdayScraper(ApiScraper):
             'location': clean_text(location_text) if location_text else None,
         }
 
-    def _fetch_listing_page(self, start: int, time_range_hours: int) -> ListingPage:
+    def _fetch_listing_page(self, start: int, _time_range_hours: int) -> ListingPage:
         response = post_with_retry(
             lambda: self._session,
             self.list_url,

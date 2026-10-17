@@ -211,7 +211,7 @@ class WellfoundScraper(BaseScraper):
             extra={'job_id': job_id, 'slug': slug},
         )
 
-    def _fetch_listing_page(self, start: int, time_range_hours: int) -> ListingPage:
+    def _fetch_listing_page(self, start: int, _time_range_hours: int) -> ListingPage:
         if start > 0:
             return ListingPage(stop=True)
         return self._run_on_browser_thread(self._with_network_retry, self._fetch_all_listings_on_browser_thread)

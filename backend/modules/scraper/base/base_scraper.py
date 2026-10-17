@@ -74,7 +74,11 @@ class BaseScraper(ABC):
         """Fetch and parse one page of candidate jobs starting at `start`, applying any
         listing-level filtering only the scraper itself can do (e.g. a posted-date
         cutoff). Set `ListingPage.stop=True` once pagination should end (e.g. an empty
-        page, or a scraper-specific threshold like too many consecutive empty pages)."""
+        page, or a scraper-specific threshold like too many consecutive empty pages).
+
+        `time_range_hours` is a LinkedIn-only concept (its search API takes a posted-
+        within-window param); every other scraper should ignore it (prefix the
+        parameter with `_` to signal that) rather than implementing a time cutoff."""
 
     @abstractmethod
     def _fetch_detail_fields(self, listing: ScraperJobData) -> dict:
