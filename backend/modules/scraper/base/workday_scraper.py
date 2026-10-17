@@ -1,10 +1,8 @@
 from abc import abstractmethod
 
-from common.utils.http import post_with_retry
 from modules.jobs.utils.url_cleaner import clean_job_url
 from modules.scraper.base.api_scraper import ApiScraper
-from modules.scraper.constants import REQUEST_TIMEOUT_SECONDS
-from modules.scraper.types import ListingPage, ScraperJobData
+from modules.scraper.types import ScraperJobData
 from modules.scraper.utils.text_cleaner import clean_text
 
 
@@ -51,6 +49,10 @@ class WorkdayScraper(ApiScraper):
         return 20
 
     @property
+    def list_http_method(self) -> str:
+        return 'POST'
+
+    @property
     def list_url(self) -> str:
         return f'https://{self.workday_host}/wday/cxs/{self.tenant}/{self.site}/jobs'
 
@@ -82,6 +84,9 @@ class WorkdayScraper(ApiScraper):
     def parse_list_items(self, response_json: dict) -> list[dict]:
         return response_json.get('jobPostings', [])
 
+    def extract_total_count(self, response_json: dict) -> int | None:
+        return response_json.get('total')
+
     def map_item_to_listing(self, item: dict) -> ScraperJobData | None:
         external_path = item.get('externalPath')
         bullet_fields = item.get('bulletFields') or []
@@ -107,37 +112,6 @@ class WorkdayScraper(ApiScraper):
             'description': clean_text(posting_info.get('jobDescription')),
             'location': clean_text(location_text) if location_text else None,
         }
-
-    def _fetch_listing_page(self, start: int, _time_range_hours: int) -> ListingPage:
-        response = post_with_retry(
-            lambda: self._session,
-            self.list_url,
-            json=self.build_list_params(start),
-            timeout=REQUEST_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        response_json = self._parse_json(response)
-        items = self.parse_list_items(response_json)
-
-        if not items:
-            self._logger.info('stopping pagination, got an empty page')
-            return ListingPage(stop=True)
-
-        listings = []
-        for item in items:
-            listing = self.map_item_to_listing(item)
-            if listing is not None:
-                listings.append(listing)
-
-        # Once `start` passes the real result count, Workday re-serves the last page
-        # instead of an empty one, which would otherwise page forever. `total` in the
-        # response is authoritative, so stop as soon as this page reaches/passes it.
-        total = response_json.get('total')
-        stop = isinstance(total, int) and start + len(items) >= total
-        if stop:
-            self._logger.info('stopping pagination, reached total=%s at start=%s', total, start)
-
-        return ListingPage(listings=listings, stop=stop)
 
     def _fetch_detail_fields(self, listing: ScraperJobData) -> dict:
         response = self._request(self.detail_base_url + listing.extra['external_path'])

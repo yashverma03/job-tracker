@@ -122,6 +122,9 @@ class BeesiteScraper(ApiScraper):
     def parse_list_items(self, response_json: dict) -> list[dict]:
         return (response_json.get('SearchResult') or {}).get('SearchResultItems') or []
 
+    def extract_total_count(self, response_json: dict) -> int | None:
+        return (response_json.get('SearchResult') or {}).get('SearchResultCountAll')
+
     def map_item_to_listing(self, item: dict) -> ScraperJobData | None:
         descriptor = item.get('MatchedObjectDescriptor') or {}
         position_id = descriptor.get('PositionID') or item.get('MatchedObjectId')

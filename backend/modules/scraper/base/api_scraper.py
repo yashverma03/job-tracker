@@ -97,10 +97,22 @@ class ApiScraper(BaseScraper):
         """Pull whatever fields the detail endpoint provides, as a dict to merge onto
         the listing (typically just `description`)."""
 
+    def extract_total_count(self, response_json: dict) -> int | None:
+        """Override to pull this response's own total-match-count field (if the API
+        exposes one - e.g. `total`, `totalJobs`, a nested `SearchResultCountAll`),
+        so pagination can stop as soon as `start + len(items)` reaches it. Without
+        this, pagination can only stop once a page comes back empty, which both
+        wastes one request past the true end every run, and would page forever
+        against an API that re-serves its last page instead of an empty one past the
+        end (Workday does this). Returns `None` by default - no known total, stop on
+        an empty page only."""
+        return None
+
     def _fetch_listing_page(self, start: int, _time_range_hours: int) -> ListingPage:
         response = self._request_with_method(self.list_http_method, self.list_url, self.build_list_params(start))
         response.raise_for_status()
-        items = self.parse_list_items(self._parse_json(response))
+        response_json = self._parse_json(response)
+        items = self.parse_list_items(response_json)
 
         if not items:
             self._logger.info('stopping pagination, got an empty page')
@@ -112,7 +124,12 @@ class ApiScraper(BaseScraper):
             if listing is not None:
                 listings.append(listing)
 
-        return ListingPage(listings=listings)
+        total = self.extract_total_count(response_json)
+        stop = isinstance(total, int) and start + len(items) >= total
+        if stop:
+            self._logger.info('stopping pagination, reached total=%s at start=%s', total, start)
+
+        return ListingPage(listings=listings, stop=stop)
 
     def _fetch_detail_fields(self, listing: ScraperJobData) -> dict:
         response = self._request_with_method(
