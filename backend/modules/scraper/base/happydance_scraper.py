@@ -115,7 +115,7 @@ class HappydanceScraper(BaseScraper):
 
         return ScraperJobData(
             url=clean_job_url(urljoin(f'https://{self.host}', relative_url)),
-            official_id=str(job_id),
+            official_id=None,
             title=clean_text(job.get('title')),
             company_name=self.company_name,
             location=clean_text(job.get('locations')),
@@ -127,13 +127,25 @@ class HappydanceScraper(BaseScraper):
         return self.parse_detail_fields(response.text)
 
     def parse_detail_fields(self, html: str) -> dict:
-        """Pulls the schema.org `JobPosting` JSON-LD block out of the detail page for
-        the only field the listing page doesn't already provide: the full
-        description. Overridable in case a tenant's JSON-LD is shaped differently."""
+        """Pulls fields out of the detail page's schema.org `JobPosting` JSON-LD block:
+        the full description (the listing page doesn't provide it), and
+        `identifier.value` (e.g. 'REF2134F') as `official_id` - the tenant's own
+        human-facing reference code, and the stable id its applicant-facing UI
+        actually shows, as opposed to the internal/routing id in the URL. Left out
+        entirely (so `official_id` stays null) if a tenant's JSON-LD doesn't have one -
+        never falls back to the internal id, since `job_unique_key_service` dedup
+        keys on `official_id` and a wrong id is worse than a missing one. Overridable
+        in case a tenant's JSON-LD is shaped differently."""
         job_posting = self._find_job_posting_ld_json(html)
         if job_posting is None:
             return {}
-        return {'description': clean_text(job_posting.get('description'))}
+
+        fields = {'description': clean_text(job_posting.get('description'))}
+        identifier = job_posting.get('identifier')
+        reference_id = identifier.get('value') if isinstance(identifier, dict) else None
+        if reference_id:
+            fields['official_id'] = clean_text(reference_id)
+        return fields
 
     def _find_job_posting_ld_json(self, html: str) -> dict | None:
         soup = BeautifulSoup(html, 'html.parser')

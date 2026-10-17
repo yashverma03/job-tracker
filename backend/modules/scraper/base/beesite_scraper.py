@@ -131,12 +131,21 @@ class BeesiteScraper(ApiScraper):
 
         return ScraperJobData(
             url=clean_job_url(self.job_url_template.format(position_id=position_id)),
-            official_id=str(position_id),
+            official_id=self._resolve_official_id(descriptor, position_id),
             title=clean_text(descriptor.get('PositionTitle')),
             company_name=self.company_name,
             location=clean_text(_build_location_text(descriptor.get('PositionLocation'))),
             extra={'position_id': position_id},
         )
+
+    def _resolve_official_id(self, descriptor: dict, position_id: str) -> str | None:
+        """`PositionID` is Beesite's own transient listing slot, not the tenant's real,
+        publicly displayed requisition id - override to derive the latter from
+        `descriptor` (requesting whatever extra `matched_object_descriptor_fields` it
+        takes). Returns `None` by default: `PositionID` must never be used as a
+        stand-in `official_id`, since `job_unique_key_service` dedup keys on it, and a
+        wrong id is worse than a missing one."""
+        return None
 
     def build_detail_params(self, listing: ScraperJobData) -> dict:
         return {}

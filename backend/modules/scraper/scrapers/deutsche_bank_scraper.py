@@ -1,4 +1,6 @@
-from modules.scraper.base.beesite_scraper import BeesiteScraper
+import re
+
+from modules.scraper.base.beesite_scraper import DEFAULT_MATCHED_OBJECT_FIELDS, BeesiteScraper
 from modules.scraper.enums.scraper_name import ScraperName
 from modules.scraper.scrapers.registry import register_scraper
 
@@ -15,6 +17,9 @@ SEARCH_CRITERIA = [
     {'CriterionName': 'ProfessionCategory.Code', 'CriterionValue': [ENGINEERING_PROFESSION_CATEGORY_CODE]},
     {'CriterionName': 'Profession.Code', 'CriterionValue': [ENGINEERING_PROFESSION_CODE]},
 ]
+
+MATCHED_OBJECT_DESCRIPTOR_FIELDS = (*DEFAULT_MATCHED_OBJECT_FIELDS, 'ApplyURI')
+REQUISITION_ID_PATTERN = re.compile(r'_([A-Z]\d{6,})(?:-\d+)?/apply')
 
 
 @register_scraper
@@ -38,3 +43,15 @@ class DeutscheBankScraper(BeesiteScraper):
     @property
     def search_criteria(self) -> list[dict]:
         return SEARCH_CRITERIA
+
+    @property
+    def matched_object_descriptor_fields(self) -> tuple[str, ...]:
+        return MATCHED_OBJECT_DESCRIPTOR_FIELDS
+
+    def _resolve_official_id(self, descriptor: dict, position_id: str) -> str | None:
+        for apply_uri in descriptor.get('ApplyURI') or []:
+            match = REQUISITION_ID_PATTERN.search(apply_uri)
+            if match:
+                return match.group(1)
+        self._record_error(None, f'missing requisition id in ApplyURI, official_id will be null: {position_id}')
+        return None
