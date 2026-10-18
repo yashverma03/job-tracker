@@ -1,8 +1,5 @@
 from common.utils.text_normalizer import normalize_text
 
-# Roles that are out of scope regardless of scraper/source. Kept here (rather than per-scraper)
-# so every strategy excludes the same set of titles. A title is excluded if any of these
-# words/phrases is present anywhere in it, after normalizing both sides.
 EXCLUDED_TITLE_WORDS: list[str] = [
     'manager',
     'principle',
@@ -112,10 +109,25 @@ EXCLUDED_TITLE_WORDS: list[str] = [
     'frontend developer',
     'frontend engineer',
     'frontend software',
+    'account executive',
+    'business executive',
+    'operation executive',
+    'operations executive',
+    'business development executive',
+    'channel sales executive',
+    'operation associate',
+    'operations associate',
+    'business associate',
+    'business analyst',
+    'business development',
+    'sales development representative',
+    'banking operation',
+    'banking operations',
+    'content marketing',
+    'product sales',
+    'product designer',
 ]
 
-# Cities/regions in scope, matched as a normalized substring of the incoming location
-# (each entry paired with its common alternate names/spellings).
 ALLOWED_LOCATION_SUBSTRINGS: list[str] = [
     'delhi',
     'new delhi',
@@ -138,42 +150,48 @@ ALLOWED_LOCATION_SUBSTRINGS: list[str] = [
     'remote',
     'location',
     'unknown',
-    'NA',
 ]
 
 # Only an exact "India" (no city specified) is in scope, not any location that merely
-# contains "India" (e.g. "West Bengal, India").
+# contains "India" (e.g. "West Bengal, India"). "NA"/"N/A" is matched the same way -
+# exact (the whole, word-tokenized location), never a substring - since as a raw
+# substring it falsely matches inside unrelated words (e.g. "Canada", "National").
 EXACT_ALLOWED_LOCATIONS: list[str] = [
     'india',
+    'na',
 ]
+
+
+def _words(text: str) -> list[str]:
+    return normalize_text(text, ' ').strip().split(' ')
+
+
+def _contains_phrase(words: list[str], phrase: str) -> bool:
+    phrase_words = _words(phrase)
+    phrase_len = len(phrase_words)
+    return any(words[start : start + phrase_len] == phrase_words for start in range(len(words) - phrase_len + 1))
 
 
 def is_title_excluded(title: str | None) -> bool:
     if not title:
         return False
 
-    normalized_title = normalize_text(title, ' ').strip()
-    if not normalized_title:
+    title_words = _words(title)
+    if title_words == ['']:
         return False
 
-    title_words = normalized_title.split(' ')
-
-    for word in EXCLUDED_TITLE_WORDS:
-        phrase_words = normalize_text(word, ' ').strip().split(' ')
-        phrase_len = len(phrase_words)
-        for start in range(len(title_words) - phrase_len + 1):
-            if title_words[start:start + phrase_len] == phrase_words:
-                return True
-
-    return False
+    return any(_contains_phrase(title_words, word) for word in EXCLUDED_TITLE_WORDS)
 
 
 def is_location_excluded(location: str | None) -> bool:
-    normalized_location = normalize_text(location)
-    if not normalized_location:
+    if not location:
         return False
 
-    if normalized_location in EXACT_ALLOWED_LOCATIONS:
+    location_words = _words(location)
+    if location_words == ['']:
         return False
 
-    return not any(normalize_text(city) in normalized_location for city in ALLOWED_LOCATION_SUBSTRINGS)
+    if location_words in (_words(allowed) for allowed in EXACT_ALLOWED_LOCATIONS):
+        return False
+
+    return not any(_contains_phrase(location_words, city) for city in ALLOWED_LOCATION_SUBSTRINGS)
