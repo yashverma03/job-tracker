@@ -25,3 +25,5 @@ class ScraperName(models.TextChoices):
     PAYTM = 'Paytm', 'Paytm'
     SAP = 'SAP', 'SAP'
     DEUTSCHE_BANK = 'Deutsche Bank', 'Deutsche Bank'
+    EIGHTFOLD_AI = 'Eightfold AI', 'Eightfold AI'
+    STRIPE = 'Stripe', 'Stripe'
