@@ -1,5 +1,7 @@
 from common.utils.text_normalizer import normalize_text
 
+# Roles out of scope regardless of scraper/source. A title is excluded if any entry here
+# appears as whole, consecutive word(s) anywhere in it (see `is_title_excluded`).
 EXCLUDED_TITLE_WORDS: list[str] = [
     'manager',
     'principle',
@@ -128,6 +130,8 @@ EXCLUDED_TITLE_WORDS: list[str] = [
     'product designer',
 ]
 
+# Cities/regions in scope. A location is allowed if any entry here appears as whole,
+# consecutive word(s) anywhere in it (see `is_location_excluded`).
 ALLOWED_LOCATION_SUBSTRINGS: list[str] = [
     'delhi',
     'new delhi',
@@ -163,16 +167,33 @@ EXACT_ALLOWED_LOCATIONS: list[str] = [
 
 
 def _words(text: str) -> list[str]:
+    """Lowercase `text` and split it into whole words, treating any run of
+    non-alphanumeric characters as a separator - so "US-Remote" becomes
+    ["us", "remote"] and "Senior, Engineer" becomes ["senior", "engineer"]."""
     return normalize_text(text, ' ').strip().split(' ')
 
 
+def _exact_match(text: str, candidate: str) -> bool:
+    """True if `text`, with every non-alphanumeric character removed entirely (not
+    just split on), equals `candidate` - e.g. "N/A" and "na" both reduce to "na" and
+    match each other, since here the punctuation is noise, not a word boundary."""
+    return normalize_text(text) == normalize_text(candidate)
+
+
 def _contains_phrase(words: list[str], phrase: str) -> bool:
+    """True if `phrase`'s words appear as a consecutive run inside `words`, in the
+    same order. A one-word phrase must match one whole word; a two-word phrase must
+    match two adjacent words in that exact order, and so on - never a fragment of a
+    longer word (e.g. "lead" won't match inside "leadership") and never out of order
+    or with other words in between."""
     phrase_words = _words(phrase)
     phrase_len = len(phrase_words)
     return any(words[start : start + phrase_len] == phrase_words for start in range(len(words) - phrase_len + 1))
 
 
 def is_title_excluded(title: str | None) -> bool:
+    """Excluded if any phrase in `EXCLUDED_TITLE_WORDS` is found anywhere in the
+    title (e.g. "lead" matches "Tech Lead"; "sde 3" matches "SDE 3 Engineer")."""
     if not title:
         return False
 
@@ -184,6 +205,11 @@ def is_title_excluded(title: str | None) -> bool:
 
 
 def is_location_excluded(location: str | None) -> bool:
+    """Allowed (not excluded) in two cases: the location exactly equals one of
+    `EXACT_ALLOWED_LOCATIONS` once punctuation is stripped (e.g. just "India", or the
+    placeholder "N/A" - but not "India, Remote" or "Indiana"); or any phrase in
+    `ALLOWED_LOCATION_SUBSTRINGS` is found anywhere in it (e.g. "remote" matches
+    "US-Remote"; "bengaluru" matches "Bengaluru, India"). Anything else is excluded."""
     if not location:
         return False
 
@@ -191,7 +217,7 @@ def is_location_excluded(location: str | None) -> bool:
     if location_words == ['']:
         return False
 
-    if location_words in (_words(allowed) for allowed in EXACT_ALLOWED_LOCATIONS):
+    if any(_exact_match(location, allowed) for allowed in EXACT_ALLOWED_LOCATIONS):
         return False
 
     return not any(_contains_phrase(location_words, city) for city in ALLOWED_LOCATION_SUBSTRINGS)
