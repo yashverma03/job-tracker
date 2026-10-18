@@ -128,6 +128,12 @@ EXCLUDED_TITLE_WORDS: list[str] = [
     'content marketing',
     'product sales',
     'product designer',
+    'business partner',
+    'customer success',
+    'recruiter',
+    'human resource',
+    'human resources',
+    'hr business partner',
 ]
 
 # Cities/regions in scope. A location is allowed if any entry here appears as whole,
