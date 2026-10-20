@@ -20,7 +20,10 @@ def call_with_forced_tool(
     tool_description: str,
     json_schema: dict,
 ) -> dict:
-    """Call the Anthropic API with a single tool forced via tool_choice, returning the tool's parsed input.
+    """Call the Anthropic API with a single tool, returning the tool's parsed input.
+
+    Newer models reject tool_choice types "tool"/"any" (400), so the tool is not forced via tool_choice; instead the
+    user prompt instructs the model to respond only by calling the tool and a missing tool_use block raises ApiError.
 
     Shared by every AI service that needs a structured-output response via forced tool use (resume tailoring,
     job scoring, etc.) — keeps client setup, request/response logging, and error handling in one place. The
@@ -40,7 +43,7 @@ def call_with_forced_tool(
             model=model,
             max_tokens=max_tokens,
             system=[system_block],
-            messages=[{'role': 'user', 'content': user_prompt}],
+            messages=[{'role': 'user', 'content': f'{user_prompt}\n\nRespond only by calling the `{tool_name}` tool.'}],
             tools=[
                 {
                     'name': tool_name,
@@ -48,7 +51,7 @@ def call_with_forced_tool(
                     'input_schema': json_schema,
                 },
             ],
-            tool_choice={'type': 'tool', 'name': tool_name},
+            tool_choice={'type': 'auto'},
         )
     except anthropic.APIError as exc:
         elapsed = (datetime.now() - start).total_seconds()
