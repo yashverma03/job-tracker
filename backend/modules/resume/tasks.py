@@ -16,8 +16,8 @@ def run_resume_generation_batch_task(job_ids: list[int], output_dir: str) -> Non
         outcomes.append(outcome)
         log_resume_progress(index, len(jobs), outcome)
 
-    generated = [outcome for outcome in outcomes if outcome.file_path is not None]
-    failed = [outcome for outcome in outcomes if outcome.file_path is None]
+    generated = [outcome for outcome in outcomes if outcome.error is None]
+    failed = [outcome for outcome in outcomes if outcome.error is not None]
 
     log_resume_batch_result(total=len(jobs), generated=generated, failed=failed)
     NotificationManager.show(

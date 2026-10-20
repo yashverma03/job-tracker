@@ -1,5 +1,6 @@
 import os
 import shutil
+from urllib.parse import urlparse
 
 from django_q.models import Task
 from django_q.tasks import async_task
@@ -13,7 +14,11 @@ from modules.jobs.types.job_types import JobFilterParams
 from modules.ai.services.resume_ai_service import generate_resume_content
 from modules.resume.services.resume_pdf_service import render_resume_pdf
 from modules.resume.types.resume_types import ResumeGenerationOutcome, ResumeInput
-from modules.resume.utils.resume_constants import DEFAULT_RESUME_PATH, MIN_JOB_DESCRIPTION_LENGTH_FOR_AI
+from modules.resume.utils.resume_constants import (
+    DEFAULT_RESUME_ONLY_DOMAINS,
+    DEFAULT_RESUME_PATH,
+    MIN_JOB_DESCRIPTION_LENGTH_FOR_AI,
+)
 from modules.resume.utils.resume_input_loader import load_resume_input
 from modules.resume.utils.text_cleaner import clean_job_description
 
@@ -47,7 +52,16 @@ def _mark_resume_generated(job: Job) -> None:
     job.save(update_fields=['is_custom_resume_generated'])
 
 
+def _uses_default_resume_only(job: Job) -> bool:
+    hostname = (urlparse(job.url or '').hostname or '').lower()
+    return any(hostname == domain or hostname.endswith(f'.{domain}') for domain in DEFAULT_RESUME_ONLY_DOMAINS)
+
+
 def process_job(job: Job, resume_input: ResumeInput, output_dir: str) -> ResumeGenerationOutcome:
+    if _uses_default_resume_only(job):
+        _mark_resume_generated(job)
+        return ResumeGenerationOutcome(job_id=job.pk, reason='Platform does not accept custom resumes; skipped.')
+
     file_path = os.path.join(output_dir, _resume_filename(resume_input, job.pk))
 
     if len(clean_job_description(job.description or '')) < MIN_JOB_DESCRIPTION_LENGTH_FOR_AI:
