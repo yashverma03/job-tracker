@@ -85,14 +85,21 @@ class WorkdayScraper(ApiScraper):
         return response_json.get('jobPostings', [])
 
     def extract_total_count(self, response_json: dict) -> int | None:
-        return response_json.get('total')
+        # Workday only reports `total` on the first page (offset 0) and returns 0 on
+        # every later page, so remember the first real value instead of trusting 0.
+        total = response_json.get('total')
+        if total:
+            self._known_total = total
+        return getattr(self, '_known_total', None)
 
     def map_item_to_listing(self, item: dict) -> ScraperJobData | None:
         external_path = item.get('externalPath')
         bullet_fields = item.get('bulletFields') or []
         official_id = bullet_fields[0] if bullet_fields else None
         if not external_path or not official_id:
-            self._record_error(None, f'missing externalPath or bulletFields: {item}')
+            # Workday occasionally lists a placeholder posting with no external path
+            # (nothing to fetch or apply to), so skip it rather than failing the run.
+            self._logger.warning('skipping posting without externalPath or bulletFields: %s', item)
             return None
 
         return ScraperJobData(
