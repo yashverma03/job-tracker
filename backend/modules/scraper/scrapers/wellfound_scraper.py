@@ -28,8 +28,34 @@ PASSWORD_ENV_KEY = 'SCRAPER_WELLFOUND_PASSWORD'
 
 SESSION_COOKIE_NAME = '_wellfound'
 JOB_SEARCH_OPERATION = 'JobSearchResultsX'
+JOB_SEARCH_REQUEST_BODY = {
+    'operationName': JOB_SEARCH_OPERATION,
+    'variables': {
+        'filterConfigurationInput': {
+            'page': 1,
+            'roleTagIds': ['14726', '151647', '151718', '751460'],
+            'companySizes': [
+                'SIZE_11_50',
+                'SIZE_51_200',
+                'SIZE_201_500',
+                'SIZE_501_1000',
+                'SIZE_1001_5000',
+                'SIZE_5000_PLUS',
+            ],
+            'equity': {'min': None, 'max': None},
+            'includeJobsWithoutExperience': True,
+            'jobTypes': ['full_time'],
+            'excludedKeywords': ['Staff software', 'Lead software', 'SDET'],
+            'includeJobsWithoutSalary': True,
+            'remotePreference': 'REMOTE_OPEN',
+            'salary': {'min': 13, 'max': None},
+            'yearsExperience': {'min': 2, 'max': 3},
+        }
+    },
+    'extensions': {'operationId': 'tfe/5f366cd305b4f13cf6098df75f7ff2bb92fa42b9a74cb3a3aec7bdc69c6b051e'},
+}
 SORT_BY_MOST_RECENT = 'LAST_POSTED'
-MAX_LISTING_PAGES = 100
+RESULTS_PER_PAGE = 40
 REQUEST_DELAY_SECONDS = 3
 
 NAVIGATION_TIMEOUT_MS = 45000
@@ -56,9 +82,10 @@ class WellfoundScraper(BaseScraper):
     search API and fetches job pages over plain HTTP.
 
     The browser is only opened for that bootstrap, lazily on the first request, and is
-    closed before any listing or detail request goes out. The captured search request
-    is reused as the template, so the account's saved search filters apply. Every request
-    is spaced out by `REQUEST_DELAY_SECONDS` to stay clear of rate limiting."""
+    closed before any listing or detail request goes out. The search request body is
+    fixed in `JOB_SEARCH_REQUEST_BODY` (each request only sets the page, sort and page
+    size on top of it), not read from the account's saved filters. Every request is
+    spaced out by `REQUEST_DELAY_SECONDS` to stay clear of rate limiting."""
 
     @property
     def name(self) -> ScraperName:
@@ -75,7 +102,6 @@ class WellfoundScraper(BaseScraper):
     def __init__(self):
         super().__init__()
         self._session = new_session()
-        self._request_template: dict | None = None
         self._api_headers: dict = {}
         self._seen_job_ids: set = set()
 
@@ -142,7 +168,6 @@ class WellfoundScraper(BaseScraper):
                 signature = search_request.all_headers().get('x-apollo-signature')
                 if not signature:
                     raise RuntimeError('Wellfound job search request had no x-apollo-signature header')
-                request_template = search_request.post_data_json
             finally:
                 browser.close()
 
@@ -154,7 +179,6 @@ class WellfoundScraper(BaseScraper):
             'x-requested-with': 'XMLHttpRequest',
             'referer': JOBS_URL,
         }
-        self._request_template = request_template
         self._logger.info('logged into Wellfound as %s', email)
 
     def _throttled(self, send):
@@ -162,12 +186,13 @@ class WellfoundScraper(BaseScraper):
         return send()
 
     def _search_jobs(self, page_number: int) -> dict:
-        if self._request_template is None:
+        if not self._api_headers:
             self._with_network_retry(self._bootstrap_session)
-        body = copy.deepcopy(self._request_template or {})
+        body = copy.deepcopy(JOB_SEARCH_REQUEST_BODY)
         filters = body['variables']['filterConfigurationInput']
         filters['page'] = page_number
         filters['sortBy'] = SORT_BY_MOST_RECENT
+        filters['perPage'] = RESULTS_PER_PAGE
 
         response = self._throttled(
             lambda: post_with_retry(
@@ -194,8 +219,11 @@ class WellfoundScraper(BaseScraper):
                 startups.append(node)
         return startups
 
+    def _search_results(self, response_json: dict) -> dict:
+        return response_json['data']['talent']['jobSearchResults']
+
     def _search_edges(self, response_json: dict) -> list[dict]:
-        return response_json['data']['talent']['jobSearchResults'].get('startups', {}).get('edges', [])
+        return self._search_results(response_json).get('startups', {}).get('edges', [])
 
     def _parse_list_items(self, edges: list[dict]) -> list[dict]:
         items = []
@@ -231,7 +259,8 @@ class WellfoundScraper(BaseScraper):
 
     def _fetch_listing_page(self, start: int, _time_range_hours: int) -> ListingPage:
         page_number = start // self.page_size + 1
-        edges = self._search_edges(self._search_jobs(page_number))
+        response_json = self._search_jobs(page_number)
+        edges = self._search_edges(response_json)
 
         listings = []
         has_new_jobs = False
@@ -247,8 +276,10 @@ class WellfoundScraper(BaseScraper):
                 listings.append(listing)
 
         self._logger.info('page %s: %s new jobs', page_number, len(listings))
-        # Past the last real page Wellfound keeps re-serving the same few promoted startups.
-        return ListingPage(listings=listings, stop=not has_new_jobs or page_number >= MAX_LISTING_PAGES)
+        # Past the last real page Wellfound keeps re-serving the same few promoted startups,
+        # so a page with nothing new also ends pagination if `hasNextPage` is ever wrong.
+        has_next_page = self._search_results(response_json).get('hasNextPage')
+        return ListingPage(listings=listings, stop=not has_next_page or not has_new_jobs)
 
     def _fetch_detail_fields(self, listing: ScraperJobData) -> dict:
         response = self._throttled(
