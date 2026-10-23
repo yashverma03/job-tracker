@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -47,6 +48,14 @@ def _resolve_claude_binary() -> str:
     )
 
 
+def _parse_stream_event(line: str) -> dict:
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        return {}
+    return event if isinstance(event, dict) else {}
+
+
 def run_claude_skill(skill_command: str) -> None:
     log_ai_call(f'CLI REQUEST command={skill_command}')
     start = datetime.now()
@@ -75,9 +84,23 @@ def run_claude_skill(skill_command: str) -> None:
 
     assert process.stdout is not None
 
+    command_name = skill_command.split()[0].lstrip('/')
+    result_event: dict = {}
+
     try:
         for line in process.stdout:
             log_ai_call(f'CLI STREAM {line.rstrip()}')
+
+            event = _parse_stream_event(line)
+            if event.get('type') == 'system' and event.get('subtype') == 'init':
+                # A missing command is answered as plain text with exit code 0, so check it up front.
+                if command_name not in event.get('slash_commands', []):
+                    process.kill()
+                    process.wait()
+                    log_ai_call(f'CLI ERROR command not available: {skill_command}')
+                    raise RuntimeError(f"claude CLI command '{skill_command}' is not available in the configured profile")
+            elif event.get('type') == 'result':
+                result_event = event
 
             if time.monotonic() > deadline:
                 process.kill()
@@ -95,4 +118,8 @@ def run_claude_skill(skill_command: str) -> None:
     log_ai_call(f'CLI RESPONSE elapsed={elapsed:.1f}s returncode={returncode}')
 
     if returncode != 0:
-        raise RuntimeError(f'claude CLI exited with code {returncode}')
+        raise RuntimeError(f'claude CLI exited with code {returncode}: {result_event.get("result", "")}')
+
+    if not result_event or result_event.get('is_error'):
+        log_ai_call(f'CLI ERROR command={skill_command} result={result_event.get("result", "no result event")}')
+        raise RuntimeError(f'claude CLI reported an error: {result_event.get("result", "no result event")}')
