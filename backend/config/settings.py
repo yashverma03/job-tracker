@@ -202,6 +202,10 @@ LOGGING = {
             'formatter': 'django_q',
         },
     },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
     'loggers': {
         'django.db.backends': {
             'handlers': ['console'],
