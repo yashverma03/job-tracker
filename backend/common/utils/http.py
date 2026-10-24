@@ -4,6 +4,14 @@ from tenacity import RetryError, retry, retry_if_exception_type, retry_if_result
 RETRYABLE_STATUS_CODES = {429, 999}
 MAX_GET_RETRIES = 3
 
+# 429/999 blocks don't clear in a few seconds, so back off 10s, 20s, 40s between attempts.
+RETRY_WAIT_MULTIPLIER_SECONDS = 10
+RETRY_MIN_WAIT_SECONDS = 10
+RETRY_MAX_WAIT_SECONDS = 60
+_RETRY_WAIT = wait_exponential(
+    multiplier=RETRY_WAIT_MULTIPLIER_SECONDS, min=RETRY_MIN_WAIT_SECONDS, max=RETRY_MAX_WAIT_SECONDS
+)
+
 # Kept short so a large HTML error/challenge page doesn't blow up the log line.
 RETRY_ERROR_BODY_LIMIT = 500
 
@@ -46,7 +54,7 @@ def get_with_retry(get_session, url, on_retry=None, **kwargs):
     @retry(
         retry=(retry_if_result(_is_retryable_response) | retry_if_exception_type(RequestException)),
         stop=stop_after_attempt(MAX_GET_RETRIES + 1),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=_RETRY_WAIT,
         before_sleep=(lambda *_: on_retry()) if on_retry is not None else None,
         reraise=True,
     )
@@ -66,7 +74,7 @@ def post_with_retry(get_session, url, on_retry=None, **kwargs):
     @retry(
         retry=(retry_if_result(_is_retryable_response) | retry_if_exception_type(RequestException)),
         stop=stop_after_attempt(MAX_GET_RETRIES + 1),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=_RETRY_WAIT,
         before_sleep=(lambda *_: on_retry()) if on_retry is not None else None,
         reraise=True,
     )
