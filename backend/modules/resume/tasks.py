@@ -1,26 +1,11 @@
 from common.utils.notification_manager import NotificationManager
-from modules.jobs.models import Job
-from modules.resume.services.resume_generation_service import process_job
-from modules.resume.utils.resume_input_loader import load_resume_input
-from modules.resume.utils.resume_log import log_resume_batch_result, log_resume_progress
+from modules.ai.services.claude_cli_service import run_claude_skill
+from modules.resume.services.resume_generation_service import RESUME_GENERATION_SKILL_COMMAND
 
 
-def run_resume_generation_batch_task(job_ids: list[int], output_dir: str) -> None:
-    resume_input = load_resume_input()
-    jobs_by_id = Job.objects.in_bulk(job_ids)
-    jobs = [jobs_by_id[job_id] for job_id in job_ids if job_id in jobs_by_id]
-
-    outcomes = []
-    for index, job in enumerate(jobs, start=1):
-        outcome = process_job(job, resume_input, output_dir)
-        outcomes.append(outcome)
-        log_resume_progress(index, len(jobs), outcome)
-
-    generated = [outcome for outcome in outcomes if outcome.error is None]
-    failed = [outcome for outcome in outcomes if outcome.error is not None]
-
-    log_resume_batch_result(total=len(jobs), generated=generated, failed=failed)
-    NotificationManager.show(
-        'Resume generation complete',
-        f'Total: {len(jobs)}\nSuccess: {len(generated)}\nFailed: {len(failed)}',
-    )
+def run_resume_generation_task(job_id: int | None = None) -> None:
+    """Runs the job-resume-generation skill, which tailors resume content via the API, persists it, and triggers
+    PDF generation itself. With a job_id it (re)generates just that job, otherwise every eligible job."""
+    skill_command = RESUME_GENERATION_SKILL_COMMAND if job_id is None else f'{RESUME_GENERATION_SKILL_COMMAND} {job_id}'
+    run_claude_skill(skill_command)
+    NotificationManager.show('Resume generation complete', 'Resume generation finished successfully.')

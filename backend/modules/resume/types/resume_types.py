@@ -60,7 +60,7 @@ class ResumeInput(BaseModel):
 
 
 @dataclass
-class ResumeAiOutput:
+class ResumeContent:
     summary: str
     experience_bullets: list[list[str]]
     skills: list[str]

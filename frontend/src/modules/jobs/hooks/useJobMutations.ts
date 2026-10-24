@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
 import toast from 'react-hot-toast';
 
 import {
@@ -14,7 +13,6 @@ import {
 } from '../../../common/api/jobs/jobs.service';
 import { extractErrorMessage } from '../../../common/utils/error.utils';
 import type {
-  GenerateResumesOutcome,
   JobCreateRequest,
   JobUpdateRequest,
 } from '../interfaces/job.interfaces';
@@ -27,12 +25,6 @@ interface UpdateMutationArgs {
 interface BulkUpdateMutationArgs {
   ids: number[];
   payload: JobUpdateRequest;
-}
-
-function extractResumeOutcomeError(error: unknown): string | undefined {
-  if (!axios.isAxiosError(error)) return undefined;
-  const data = error.response?.data as GenerateResumesOutcome | undefined;
-  return data?.error ?? extractErrorMessage(error);
 }
 
 export function useJobMutations() {
@@ -137,14 +129,15 @@ export function useJobMutations() {
 
   const buildResumeMutation = useMutation({
     mutationFn: (jobId: number) => generateResumeForJob(jobId),
-    onSuccess: () => {
-      invalidateJobs();
-      toast.success('Resume built');
+    onSuccess: (result) => {
+      if (result.queued) {
+        toast.success(result.message);
+      } else {
+        toast(result.message);
+      }
     },
     onError: (error) => {
-      toast.error(
-        `Failed to build resume: ${extractResumeOutcomeError(error) ?? 'unknown error'}`,
-      );
+      toast.error(extractErrorMessage(error) ?? 'Failed to queue resume generation');
     },
   });
 

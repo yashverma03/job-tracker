@@ -5,6 +5,10 @@ from modules.jobs.enums.job_status import JobStatus
 from modules.jobs.types.job_types import JobFilterParams
 
 
+class OptionalBooleanField(serializers.BooleanField):
+    default_empty_html = serializers.empty
+
+
 class JobListQueryDTO(serializers.Serializer):
     status = serializers.ListField(
         child=serializers.ChoiceField(choices=JobStatus.choices),
@@ -21,6 +25,7 @@ class JobListQueryDTO(serializers.Serializer):
     date_from = serializers.DateField(required=False, allow_null=True)
     date_to = serializers.DateField(required=False, allow_null=True)
     search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    is_custom_resume_generated = OptionalBooleanField(required=False, allow_null=True)
     page = serializers.IntegerField(required=False, min_value=1, default=1)
     limit = serializers.IntegerField(min_value=1)
 
@@ -34,4 +39,5 @@ class JobListQueryDTO(serializers.Serializer):
             date_from=data.get('date_from'),
             date_to=data.get('date_to'),
             search=data.get('search'),
+            is_custom_resume_generated=data.get('is_custom_resume_generated'),
         )

@@ -38,12 +38,6 @@ export interface JobStatsResponse {
   pendingJobsCount: number;
 }
 
-export interface GenerateResumesOutcome {
-  jobId: number;
-  filePath?: string | null;
-  error?: string | null;
-}
-
 export interface GenerateResumesQueuedResponse {
   queued: boolean;
   processing: number;

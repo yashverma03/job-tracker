@@ -2,7 +2,6 @@ import axios from 'axios';
 
 import { API_BASE_URL } from '../../configs/api.config';
 import type {
-  GenerateResumesOutcome,
   GenerateResumesQueuedResponse,
   JobCreateRequest,
   JobListQueryParams,
@@ -64,8 +63,8 @@ export async function markToApplyAsApplied(): Promise<{ updatedCount: number }> 
 
 export async function generateResumeForJob(
   jobId: number,
-): Promise<GenerateResumesOutcome> {
-  const { data } = await client.post<GenerateResumesOutcome>(
+): Promise<GenerateResumesQueuedResponse> {
+  const { data } = await client.post<GenerateResumesQueuedResponse>(
     `/resumes/${jobId}`,
   );
   return data;

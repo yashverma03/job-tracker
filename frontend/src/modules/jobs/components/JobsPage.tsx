@@ -113,17 +113,7 @@ export function JobsPage() {
   };
 
   const handleGenerateResume = (job: Job) => {
-    buildResumeMutation.mutate(job.id, {
-      onSuccess: (outcome) => {
-        if (!outcome.error) {
-          setEditingJob((prev) =>
-            prev && prev.id === job.id
-              ? { ...prev, isCustomResumeGenerated: true }
-              : prev,
-          );
-        }
-      },
-    });
+    buildResumeMutation.mutate(job.id);
   };
 
   const handleFormSubmit = (payload: JobUpdateRequest) => {

@@ -27,6 +27,7 @@ class Job(models.Model):
     score = models.IntegerField(null=True, blank=True)
     analysis = models.TextField(null=True, blank=True)
     is_custom_resume_generated = models.BooleanField(default=False)
+    resume_data = models.JSONField(null=True, blank=True)
     is_manual_created = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True, db_default=Now())
     updated_at = models.DateTimeField(auto_now=True, db_default=Now())

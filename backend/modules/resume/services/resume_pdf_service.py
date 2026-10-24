@@ -13,7 +13,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from common.exceptions.api_exceptions import ApiError
-from modules.resume.types.resume_types import ResumeAiOutput, ResumeInput
+from modules.resume.types.resume_types import ResumeContent, ResumeInput
 
 PAGE_MARGIN = 0.45 * inch
 
@@ -46,7 +46,7 @@ def _link(url: str, label: str) -> str:
 
 
 def _render_bullet(text: str) -> str:
-    # AI-authored bullets mark metrics with **double asterisks**; escape any raw XML-special characters first
+    # Stored bullets mark metrics with **double asterisks**; escape any raw XML-special characters first
     # (Paragraph markup is HTML-like) so the metric markers are the only thing translated into <b> tags.
     return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escape(text))
 
@@ -74,7 +74,7 @@ def _two_column_row(left: str, right: str, left_style: ParagraphStyle, right_sty
     return table
 
 
-def _build_story(resume_input: ResumeInput, ai_output: ResumeAiOutput, usable_width: float) -> list:
+def _build_story(resume_input: ResumeInput, content: ResumeContent, usable_width: float) -> list:
     contact = resume_input.contact
     contact_line = ' | '.join([
         _link(contact.portfolio_url, 'Portfolio'),
@@ -92,10 +92,10 @@ def _build_story(resume_input: ResumeInput, ai_output: ResumeAiOutput, usable_wi
     ]
 
     story += _heading('SUMMARY')
-    story.append(Paragraph(ai_output.summary, BODY_STYLE))
+    story.append(Paragraph(content.summary, BODY_STYLE))
 
     story += _heading('EXPERIENCE')
-    experience_entries = list(zip(resume_input.experience, ai_output.experience_bullets))
+    experience_entries = list(zip(resume_input.experience, content.experience_bullets))
     for i, (entry, bullets) in enumerate(experience_entries):
         story.append(_two_column_row(
             f'{entry.title} | {entry.company}', entry.duration, ROLE_STYLE, DATE_STYLE, usable_width,
@@ -107,8 +107,8 @@ def _build_story(resume_input: ResumeInput, ai_output: ResumeAiOutput, usable_wi
             story.append(Spacer(1, 14))
 
     story += _heading('SKILLS')
-    if ai_output.skills:
-        story.append(Paragraph(', '.join(ai_output.skills), BULLET_STYLE, bulletText='●'))
+    if content.skills:
+        story.append(Paragraph(', '.join(content.skills), BULLET_STYLE, bulletText='●'))
 
     story += _heading('CERTIFICATIONS')
     for cert in resume_input.certifications:
@@ -123,7 +123,7 @@ def _build_story(resume_input: ResumeInput, ai_output: ResumeAiOutput, usable_wi
     return story
 
 
-def render_resume_pdf(resume_input: ResumeInput, ai_output: ResumeAiOutput, output_path: str) -> None:
+def render_resume_pdf(resume_input: ResumeInput, content: ResumeContent, output_path: str) -> None:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -139,7 +139,7 @@ def render_resume_pdf(resume_input: ResumeInput, ai_output: ResumeAiOutput, outp
     # Paragraphs wrap within that inset automatically, so our manual Table widths must match it too.
     usable_width = A4[0] - PAGE_MARGIN * 2 - 12
 
-    story = _build_story(resume_input, ai_output, usable_width)
+    story = _build_story(resume_input, content, usable_width)
     doc.build(story)
 
     page_count = len(PdfReader(io.BytesIO(buffer.getvalue())).pages)

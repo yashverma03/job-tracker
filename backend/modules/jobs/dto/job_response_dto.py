@@ -28,4 +28,5 @@ class JobResponseDTO(serializers.ModelSerializer):
             'score',
             'analysis',
             'is_custom_resume_generated',
+            'resume_data',
         ]
