@@ -8,6 +8,7 @@ from curl_cffi.requests.exceptions import HTTPError
 
 from common.exceptions.api_exceptions import ApiError
 from common.utils.env import get_env_int
+from common.utils.http import RetryExhaustedError
 from modules.company.services import company_service
 from modules.jobs.enums.job_referral_status import JobReferralStatus
 from modules.jobs.enums.job_status import JobStatus
@@ -25,6 +26,8 @@ ERROR_BODY_LOG_LIMIT = 2000
 
 
 def _format_http_error(exc: HTTPError, status_code: int | None, body: str | None) -> str:
+    if isinstance(exc, RetryExhaustedError):
+        return str(exc)
     truncated_body = body[:ERROR_BODY_LOG_LIMIT] if body else body
     return f'{exc} | status={status_code} body={truncated_body!r}'
 
@@ -254,7 +257,7 @@ class BaseScraper(ABC):
             self._record_error(listing.url, _format_http_error(exc, status_code, body))
             return
         except Exception as exc:  # noqa: BLE001 - one job's failure must not abort the run
-            self._record_error(listing.url, str(exc))
+            self._record_error(listing.url, f'{type(exc).__name__}: {exc}')
             return
 
         with self._state_lock:
@@ -290,7 +293,7 @@ class BaseScraper(ABC):
                 return
             self._record_error(listing.url, str(exc))
         except Exception as exc:  # noqa: BLE001 - one job's failure must not abort the run
-            self._record_error(listing.url, str(exc))
+            self._record_error(listing.url, f'{type(exc).__name__}: {exc}')
 
     def get_exclusion_reason(self, title: str | None, location: str | None, company_name: str | None) -> str | None:
         """Shared pre-insert filter every scraper strategy should apply: excluded role

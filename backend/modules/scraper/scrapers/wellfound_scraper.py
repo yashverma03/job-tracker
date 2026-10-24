@@ -59,6 +59,7 @@ RESULTS_PER_PAGE = 40
 REQUEST_DELAY_SECONDS = 3
 
 NAVIGATION_TIMEOUT_MS = 45000
+BROWSER_LAUNCH_TIMEOUT_MS = 30000
 
 NETWORK_RETRY_INITIAL_DELAY_SECONDS = 5
 NETWORK_RETRY_MAX_TOTAL_WAIT_SECONDS = 120
@@ -144,10 +145,11 @@ class WellfoundScraper(BaseScraper):
         password = get_env(PASSWORD_ENV_KEY)
 
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
+            browser = playwright.chromium.launch(headless=True, timeout=BROWSER_LAUNCH_TIMEOUT_MS)
             try:
                 context = browser.new_context()
                 page = context.new_page()
+                page.set_default_timeout(NAVIGATION_TIMEOUT_MS)
 
                 page.goto(LOGIN_URL, wait_until='load', timeout=NAVIGATION_TIMEOUT_MS)
                 page.fill('input[name=username]', email)

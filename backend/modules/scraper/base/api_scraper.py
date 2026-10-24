@@ -62,7 +62,8 @@ class ApiScraper(BaseScraper):
             body = response.text
             truncated_body = body[:2000] if body else body
             raise ValueError(
-                f'invalid JSON response: status={response.status_code} body={truncated_body!r}'
+                'invalid JSON response (likely an HTML bot-block/challenge page): '
+                f'status={response.status_code} body={truncated_body!r}'
             ) from exc
 
     @property

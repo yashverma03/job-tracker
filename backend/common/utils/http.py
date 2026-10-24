@@ -1,8 +1,36 @@
-from curl_cffi.requests.exceptions import RequestException
-from tenacity import retry, retry_if_exception_type, retry_if_result, stop_after_attempt, wait_exponential
+from curl_cffi.requests.exceptions import HTTPError, RequestException
+from tenacity import RetryError, retry, retry_if_exception_type, retry_if_result, stop_after_attempt, wait_exponential
 
 RETRYABLE_STATUS_CODES = {429, 999}
 MAX_GET_RETRIES = 3
+
+# Kept short so a large HTML error/challenge page doesn't blow up the log line.
+RETRY_ERROR_BODY_LIMIT = 500
+
+_STATUS_HINTS = {
+    429: 'rate limited (too many requests)',
+    999: 'blocked by anti-bot protection',
+}
+
+
+class RetryExhaustedError(HTTPError):
+    """An HTTPError whose message already includes the status and response body."""
+
+
+def _retry_exhausted_error(method: str, url: str, exc: RetryError) -> RetryExhaustedError:
+    """tenacity raises a bare `RetryError` when the last attempt still returned a
+    retryable *response* (reraise only applies to exceptions), which says nothing about
+    what went wrong. Re-raise it as an `HTTPError` carrying the last response, so
+    callers' existing HTTPError handling reports the status and body."""
+    response = exc.last_attempt.result()
+    status_code = response.status_code
+    hint = _STATUS_HINTS.get(status_code, 'server error' if status_code >= 500 else 'retryable status')
+    body = (response.text or '')[:RETRY_ERROR_BODY_LIMIT]
+    message = (
+        f'{method} {url} failed after {MAX_GET_RETRIES + 1} attempts: HTTP {status_code} ({hint}); '
+        f'last response body={body!r}'
+    )
+    return RetryExhaustedError(message, response=response)
 
 
 def _is_retryable_response(response) -> bool:
@@ -25,7 +53,10 @@ def get_with_retry(get_session, url, on_retry=None, **kwargs):
     def _do_request():
         return get_session().get(url, **kwargs)
 
-    return _do_request()
+    try:
+        return _do_request()
+    except RetryError as exc:
+        raise _retry_exhausted_error('GET', url, exc) from exc
 
 
 def post_with_retry(get_session, url, on_retry=None, **kwargs):
@@ -42,4 +73,7 @@ def post_with_retry(get_session, url, on_retry=None, **kwargs):
     def _do_request():
         return get_session().post(url, **kwargs)
 
-    return _do_request()
+    try:
+        return _do_request()
+    except RetryError as exc:
+        raise _retry_exhausted_error('POST', url, exc) from exc
