@@ -4,6 +4,7 @@ from modules.jobs.dto.validators import validate_years_range
 from modules.jobs.enums.job_referral_status import JobReferralStatus
 from modules.jobs.enums.job_status import JobStatus
 from modules.jobs.models import Job
+from modules.resume.utils.resume_data_validator import validate_resume_data
 from modules.resume.utils.resume_input_loader import load_resume_input
 
 
@@ -54,16 +55,16 @@ class JobUpdateDTO(serializers.ModelSerializer):
     def validate_resume_data(self, value):
         if value is None:
             return value
-        expected_entries = len(load_resume_input().experience)
-        if len(value['experience_bullets']) != expected_entries:
-            raise serializers.ValidationError(
-                f'experienceBullets must have exactly {expected_entries} entries (one per experience entry).'
-            )
-        return {
-            'summary': value['summary'],
-            'experience_bullets': value['experience_bullets'],
-            'skills': [skill for skill in value['skills'] if skill.strip()],
-        }
+
+        summary = value['summary'].strip()
+        experience_bullets = [[bullet.strip() for bullet in bullets] for bullets in value['experience_bullets']]
+        skills = [skill.strip() for skill in value['skills']]
+
+        errors = validate_resume_data(summary, experience_bullets, skills, load_resume_input())
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return {'summary': summary, 'experience_bullets': experience_bullets, 'skills': skills}
 
     def validate(self, attrs):
         min_years = attrs.get('min_years', getattr(self.instance, 'min_years', None))
