@@ -6,9 +6,7 @@ from modules.scraper.types import ScraperJobData
 from modules.scraper.utils.text_cleaner import clean_text
 
 PAGE_SIZE = 10
-JOB_URL_TEMPLATE = 'https://app.eightfold.ai/careers/job/{position_id}'
-SEARCH_URL = 'https://app.eightfold.ai/api/pcsx/search'
-DETAIL_URL = 'https://app.eightfold.ai/api/pcsx/position_details'
+DEFAULT_HOST = 'app.eightfold.ai'
 
 
 class EightfoldScraper(ApiScraper):
@@ -27,8 +25,11 @@ class EightfoldScraper(ApiScraper):
     empty page. List items only expose a single numeric id (`id` / `displayJobId` /
     `atsJobId` - always identical, confirmed across list and detail responses for
     several jobs), with no separate human-facing requisition/reference id anywhere in
-    either payload, so that numeric id is used directly as `official_id` (not a
-    fallback - its exclusivity was explicitly confirmed, not assumed)."""
+    either payload for that tenant. `displayJobId` is the public reference id (it
+    equals `id` on that tenant, but differs on others - e.g. HP, where `id` is the
+    routing id in the URL and `displayJobId`/`atsJobId` is the real requisition
+    number), so `official_id` is `displayJobId`, left null if absent - never the
+    routing id."""
 
     @property
     @abstractmethod
@@ -40,6 +41,13 @@ class EightfoldScraper(ApiScraper):
     @abstractmethod
     def company_name(self) -> str:
         """Display name to store on the job, e.g. 'Eightfold AI'."""
+
+    @property
+    def host(self) -> str:
+        """Host serving the tenant's careers site and `/api/pcsx/*` endpoints. Defaults
+        to the shared `app.eightfold.ai`; override for tenants on a custom domain
+        (e.g. 'apply.hp.com'), which expose the identical API under their own host."""
+        return DEFAULT_HOST
 
     @property
     def location(self) -> str:
@@ -56,6 +64,13 @@ class EightfoldScraper(ApiScraper):
         return []
 
     @property
+    def job_categories(self) -> list[str]:
+        """`filter_job_category` facet value(s), used by tenants that categorize jobs
+        this way instead of `filter_department` (e.g. HP). Override per tenant; empty
+        means unfiltered."""
+        return []
+
+    @property
     def seniority_levels(self) -> list[str]:
         """`filter_seniority` facet value(s) - verified live via this tenant's own
         `filterDef.smartFilters` options (e.g. '1'=Entry, '2'=Mid/Senior, '4'=VP).
@@ -69,11 +84,11 @@ class EightfoldScraper(ApiScraper):
 
     @property
     def list_url(self) -> str:
-        return SEARCH_URL
+        return f'https://{self.host}/api/pcsx/search'
 
     @property
     def detail_url(self) -> str:
-        return DETAIL_URL
+        return f'https://{self.host}/api/pcsx/position_details'
 
     def build_list_params(self, start: int) -> dict:
         params = {
@@ -86,6 +101,8 @@ class EightfoldScraper(ApiScraper):
         }
         if self.departments:
             params['filter_department'] = list(self.departments)
+        if self.job_categories:
+            params['filter_job_category'] = list(self.job_categories)
         if self.seniority_levels:
             params['filter_seniority'] = list(self.seniority_levels)
         return params
@@ -97,16 +114,17 @@ class EightfoldScraper(ApiScraper):
         return response_json.get('data', {}).get('count')
 
     def map_item_to_listing(self, item: dict) -> ScraperJobData | None:
-        position_id = item.get('id') or item.get('displayJobId')
+        position_id = item.get('id')
         if position_id is None:
             self._record_error(None, f'missing position id: {item}')
             return None
+        display_job_id = item.get('displayJobId')
 
         locations = item.get('locations') or item.get('standardizedLocations') or []
 
         return ScraperJobData(
-            url=clean_job_url(JOB_URL_TEMPLATE.format(position_id=position_id)),
-            official_id=str(position_id),
+            url=clean_job_url(f'https://{self.host}/careers/job/{position_id}'),
+            official_id=str(display_job_id) if display_job_id else None,
             title=clean_text(item.get('name')),
             company_name=self.company_name,
             location=clean_text('; '.join(locations)) if locations else None,

@@ -27,3 +27,8 @@ class ScraperName(models.TextChoices):
     DEUTSCHE_BANK = 'Deutsche Bank', 'Deutsche Bank'
     EIGHTFOLD_AI = 'Eightfold AI', 'Eightfold AI'
     STRIPE = 'Stripe', 'Stripe'
+    DELL = 'Dell', 'Dell'
+    HP = 'HP', 'HP'
+    BROWSERSTACK = 'BrowserStack', 'BrowserStack'
+    FLIPKART = 'Flipkart', 'Flipkart'
+    VISA = 'Visa', 'Visa'
