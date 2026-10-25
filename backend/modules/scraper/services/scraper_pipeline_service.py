@@ -104,11 +104,15 @@ def run_scraper_pipeline(
     start_offset: int,
     time_range_hours: int,
     run_scoring: bool = False,
+    init_only: bool = False,
 ) -> None:
     """Runs every requested scraper concurrently (bounded by
     `SCRAPER_CONCURRENT_LIMIT`), waits for all of them to finish, then shows a single
     notification summarizing how many succeeded/failed/were skipped and how many jobs
     each added. This is the single Django-Q task queued per pipeline trigger."""
+    if init_only and scraper_run_service.has_run_today():
+        return
+
     scrapers = get_enabled_scrapers()
     if scraper_names is not None:
         scrapers = [scraper for scraper in scrapers if scraper.name in scraper_names]
@@ -175,7 +179,8 @@ def trigger_scraper_pipeline(
     so re-triggering it (e.g. after a machine restart) doesn't queue a second run.
 
     `run_scoring` controls whether job scoring runs after a fully successful pipeline
-    run. Defaults to False; the daily cron trigger sets it to True."""
+    run. Defaults to False; the daily cron trigger sets it to True.
+    """
     if init_only and scraper_run_service.has_run_today():
         return {'queued': False, 'message': 'A scraper pipeline run already exists for today.'}
 
@@ -190,6 +195,7 @@ def trigger_scraper_pipeline(
         start_offset,
         time_range_hours,
         run_scoring,
+        init_only,
         group=SCRAPER_PIPELINE_TASK_GROUP,
     )
 
