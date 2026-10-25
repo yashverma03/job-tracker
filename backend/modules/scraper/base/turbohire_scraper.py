@@ -1,5 +1,4 @@
 import json
-import time
 from abc import abstractmethod
 
 from common.utils.http import get_with_retry, post_with_retry
@@ -12,7 +11,7 @@ from modules.scraper.utils.text_cleaner import clean_text
 API_BASE_URL = 'https://thapi.azurewebsites.net'
 TOKEN_URL = f'{API_BASE_URL}/api/token/noauth'
 LIST_URL = f'{API_BASE_URL}/api/careerpagev2/filteredjobs'
-TOKEN_EXPIRY_MARGIN_SECONDS = 60
+DETAIL_URL = f'{API_BASE_URL}/api/referraljobs'
 UNFILTERED = {'Value': None, 'FilterType': 0}
 
 
@@ -22,9 +21,9 @@ class TurbohireScraper(ApiScraper):
     `thapi.azurewebsites.net` API: a public bearer token from `/api/token/noauth`
     (rejected unless the request carries the careers site as `Referer`, as the page's
     own browser does), then one POST to `careerpagev2/filteredjobs` that returns every
-    matching job at once - no pagination, and each item already carries the full
-    description, so there is no separate detail request. Subclasses only configure the
-    careers host and org id."""
+    matching job at once - no pagination. List items only carry the description cut off
+    at 500 characters, so the full one is fetched per job from `referraljobs`. Subclasses
+    only configure the careers host and org id."""
 
     @property
     @abstractmethod
@@ -56,28 +55,22 @@ class TurbohireScraper(ApiScraper):
 
     @property
     def detail_url(self) -> str:
-        # Unused: descriptions come with the list items.
-        return LIST_URL
+        return DETAIL_URL
 
     @property
     def _referer_headers(self) -> dict:
         return {'Referer': f'https://{self.host}/'}
 
-    def _get_access_token(self) -> str:
-        token = getattr(self, '_access_token', None)
-        if token and time.monotonic() < self._access_token_expires_at:
-            return token
+    def __init__(self):
+        super().__init__()
+        self._auth_headers = {**self._referer_headers, 'Authorization': f'Bearer {self._fetch_access_token()}'}
 
+    def _fetch_access_token(self) -> str:
         response = get_with_retry(
             lambda: self._session, TOKEN_URL, headers=self._referer_headers, timeout=REQUEST_TIMEOUT_SECONDS
         )
         response.raise_for_status()
-        payload = self._parse_json(response)
-        self._access_token = payload['access_token']
-        self._access_token_expires_at = (
-            time.monotonic() + payload.get('expires_in', 0) - TOKEN_EXPIRY_MARGIN_SECONDS
-        )
-        return self._access_token
+        return self._parse_json(response)['access_token']
 
     def build_list_params(self, start: int) -> dict:
         return {
@@ -108,7 +101,7 @@ class TurbohireScraper(ApiScraper):
             self.list_url,
             params={'orgId': self.org_id, 'pageType': 0},
             json=self.build_list_params(start),
-            headers={**self._referer_headers, 'Authorization': f'Bearer {self._get_access_token()}'},
+            headers=self._auth_headers,
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
@@ -132,17 +125,22 @@ class TurbohireScraper(ApiScraper):
             title=clean_text(item.get('JobTitle')),
             company_name=self.company_name,
             location=clean_text(_build_location_text(item.get('Location'))),
-            extra={'description': item.get('JobDescV2')},
+            extra={'job_token': obfuscated_id},
         )
 
     def build_detail_params(self, listing: ScraperJobData) -> dict:
         return {}
 
     def _fetch_detail_fields(self, listing: ScraperJobData) -> dict:
-        return {'description': clean_text(listing.extra.get('description'))}
+        # The job token is already percent-encoded, so it's inlined rather than passed as a param.
+        url = f'{self.detail_url}?tkn={listing.extra["job_token"]}&fieldVisibility=CareerPage'
+        response = self._request(url, headers=self._auth_headers)
+        response.raise_for_status()
+        return self.parse_detail_fields(self._parse_json(response))
 
     def parse_detail_fields(self, response_json: dict) -> dict:
-        return {'description': clean_text(response_json.get('JobDescV2'))}
+        description = response_json.get('JobDescriptionV2') or response_json.get('JobDescription')
+        return {'description': clean_text(description)}
 
 
 def _build_location_text(raw_location: str | None) -> str | None:
