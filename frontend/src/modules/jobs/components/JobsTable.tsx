@@ -46,12 +46,12 @@ function buildResumeFileUrl(jobId: number): string {
 }
 
 const CHECKBOX_COLUMN_WIDTH = 40;
-const ACTIONS_COLUMN_WIDTH = 160;
+const ACTIONS_COLUMN_WIDTH = 170;
 const ID_COLUMN_WIDTH = 70;
-const DATE_COLUMN_WIDTH = 120;
+const DATE_COLUMN_WIDTH = 110;
 const DATE_FORMAT = 'DD MMM YYYY';
 const STATUS_COLUMN_WIDTH = 170;
-const REFERRAL_STATUS_COLUMN_WIDTH = 220;
+const REFERRAL_STATUS_COLUMN_WIDTH = 180;
 const RESUME_GENERATED_COLUMN_WIDTH = 90;
 const MESSAGES_COLUMN_WIDTH = 224;
 
@@ -146,12 +146,6 @@ export function JobsTable({
               </th>
               <th
                 className={`${styles.th} ${styles.cellWrap}`}
-                style={{ width: ID_COLUMN_WIDTH }}
-              >
-                ID
-              </th>
-              <th
-                className={`${styles.th} ${styles.cellWrap}`}
                 style={{ width: DATE_COLUMN_WIDTH }}
               >
                 Date
@@ -172,6 +166,12 @@ export function JobsTable({
                   Referral status
                 </th>
               )}
+              <th
+                className={`${styles.th} ${styles.cellWrap}`}
+                style={{ width: ID_COLUMN_WIDTH }}
+              >
+                ID
+              </th>
               {COLUMNS.map((column) => (
                 <Fragment key={column.key}>
                   <th
@@ -258,19 +258,6 @@ export function JobsTable({
                 </td>
                 <td
                   className={styles.cellWrap}
-                  style={{ width: ID_COLUMN_WIDTH }}
-                >
-                  <button
-                    type="button"
-                    className={styles.copyButton}
-                    onClick={() => copy(String(job.id))}
-                    title={String(job.id)}
-                  >
-                    {job.id}
-                  </button>
-                </td>
-                <td
-                  className={styles.cellWrap}
                   style={{ width: DATE_COLUMN_WIDTH }}
                 >
                   {dayjs(job.createdAt).format(DATE_FORMAT)}
@@ -337,6 +324,19 @@ export function JobsTable({
                     </div>
                   </td>
                 )}
+                <td
+                  className={styles.cellWrap}
+                  style={{ width: ID_COLUMN_WIDTH }}
+                >
+                  <button
+                    type="button"
+                    className={styles.copyButton}
+                    onClick={() => copy(String(job.id))}
+                    title={String(job.id)}
+                  >
+                    {job.id}
+                  </button>
+                </td>
                 {COLUMNS.map((column) => {
                   if (column.key === 'url' || column.key === 'secondaryUrl') {
                     const linkValue = job[column.key] as string | null;
