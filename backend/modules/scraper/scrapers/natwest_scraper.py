@@ -23,9 +23,10 @@ DEFAULT_SEARCH_FILTERS = {
     'location': 'India',
 }
 
-# Cloudflare challenges this site, so only Chromium-family profiles are used: they carry
-# matching sec-ch-ua client hints, and the User-Agent must stay the one the profile sets.
-NATWEST_IMPERSONATE_PROFILES = ['chrome124', 'chrome131', 'chrome136', 'edge101']
+# Cloudflare challenges this site and rejects the chrome136 and edge101 fingerprints with a
+# 403 every time, so only profiles verified to pass are used. The User-Agent must stay the
+# one the profile sets.
+NATWEST_IMPERSONATE_PROFILES = ['chrome124', 'chrome131']
 
 LIST_HEADERS = {
     'Accept': 'application/json, text/javascript, */*; q=0.01',
