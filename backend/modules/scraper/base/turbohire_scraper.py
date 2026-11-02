@@ -63,7 +63,16 @@ class TurbohireScraper(ApiScraper):
 
     def __init__(self):
         super().__init__()
-        self._auth_headers = {**self._referer_headers, 'Authorization': f'Bearer {self._fetch_access_token()}'}
+        self._cached_auth_headers: dict | None = None
+
+    @property
+    def _auth_headers(self) -> dict:
+        if self._cached_auth_headers is None:
+            self._cached_auth_headers = {
+                **self._referer_headers,
+                'Authorization': f'Bearer {self._fetch_access_token()}',
+            }
+        return self._cached_auth_headers
 
     def _fetch_access_token(self) -> str:
         response = get_with_retry(
