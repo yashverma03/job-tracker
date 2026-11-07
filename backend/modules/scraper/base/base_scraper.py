@@ -21,6 +21,14 @@ from modules.scraper.utils.scraper_logger import get_scraper_logger
 REQUIRED_JOB_FIELDS = ('url', 'title', 'company_name', 'location', 'description')
 DETAIL_WORKER_COUNT_ENV_KEY = 'SCRAPER_DETAIL_WORKER_COUNT'
 
+# How often a run waiting on its detail workers re-checks whether it has been aborted.
+ABORT_POLL_SECONDS = 5
+
+
+class ScraperAbortedError(Exception):
+    """Raised inside a run that was aborted (e.g. it exceeded the per-scraper time limit)."""
+
+
 # Kept short so a large HTML error/challenge page doesn't blow up the log line.
 ERROR_BODY_LOG_LIMIT = 2000
 
@@ -55,6 +63,7 @@ class BaseScraper(ABC):
         self._total_count = 0
         self._total_unique_count = 0
         self._errors: list[dict] = []
+        self._abort_event = threading.Event()
 
     @property
     def detail_worker_count(self) -> int:
@@ -95,6 +104,24 @@ class BaseScraper(ABC):
         process for a Playwright-driven scraper). No-op by default; the caller is
         responsible for calling this exactly once per instance, after `run()` finishes
         (success or failure)."""
+
+    def abort(self) -> None:
+        """Asks a running scraper to stop as soon as possible (called from another thread
+        when the run exceeds its time limit). The run loop checks this between pages and
+        while waiting on detail fetches; subclasses override `_on_abort` to also unblock
+        anything stuck in a call that can't be interrupted otherwise (e.g. a browser)."""
+        self._abort_event.set()
+        try:
+            self._on_abort()
+        except Exception as exc:  # noqa: BLE001 - aborting must never raise into the watchdog
+            self._logger.warning('error while aborting scraper: %s', exc)
+
+    def _on_abort(self) -> None:
+        """Hook for scraper-specific cleanup that unblocks a stuck run. No-op by default."""
+
+    @property
+    def is_aborted(self) -> bool:
+        return self._abort_event.is_set()
 
     def _reset_run_state(self) -> None:
         self._total_count = 0
@@ -146,7 +173,7 @@ class BaseScraper(ABC):
         with ThreadPoolExecutor(
             max_workers=self.detail_worker_count, thread_name_prefix=f'{self.name.value}-detail'
         ) as executor:
-            while self._total_count < max_jobs_per_run:
+            while self._total_count < max_jobs_per_run and not self.is_aborted:
                 self._logger.info('fetching listing page start=%s', start)
                 try:
                     page = self._fetch_listing_page(start, time_range_hours)
@@ -178,7 +205,13 @@ class BaseScraper(ABC):
                     self._logger.info('stopping pagination, reached max_jobs_per_run=%s', max_jobs_per_run)
                     break
 
-            wait_futures(pending)
+            while pending and not self.is_aborted:
+                if not wait_futures(pending, timeout=ABORT_POLL_SECONDS).not_done:
+                    break
+            if self.is_aborted:
+                for future in pending:
+                    future.cancel()
+                raise ScraperAbortedError(f'{self.name.value} run aborted')
             for future in pending:
                 future.result()  # surface any unexpected (non-per-job) exception
 

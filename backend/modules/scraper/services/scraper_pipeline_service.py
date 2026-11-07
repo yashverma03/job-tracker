@@ -3,6 +3,7 @@ import signal
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
+from django.db import connections
 from django_q.tasks import async_task
 
 from common.utils.env import get_env_int
@@ -20,6 +21,11 @@ MAX_JOBS_PER_RUN_ENV_KEY = 'SCRAPER_MAX_JOBS_PER_RUN'
 START_OFFSET_ENV_KEY = 'SCRAPER_START_OFFSET'
 TIME_RANGE_HOURS_ENV_KEY = 'SCRAPER_TIME_RANGE_HOURS'
 CONCURRENT_SCRAPER_LIMIT_ENV_KEY = 'SCRAPER_CONCURRENT_LIMIT'
+TIMEOUT_MINUTES_ENV_KEY = 'SCRAPER_TIMEOUT_MINUTES'
+
+# After an abort is requested, how long to wait for the scraper thread to wind down
+# before giving up on it and reporting the run as failed anyway.
+ABORT_GRACE_SECONDS = 30
 
 # The whole pipeline now runs as a single Django-Q task, with every scraper running
 # concurrently on its own thread inside that one task (each scraper in turn runs its own
@@ -54,6 +60,40 @@ def _handle_termination_signal(signum: int, frame) -> None:
     os._exit(1)
 
 
+def _run_with_timeout(scraper: BaseScraper, logger, max_jobs_per_run: int, start_offset: int, time_range_hours: int):
+    """Runs `scraper.run` on its own thread and waits at most `SCRAPER_TIMEOUT_MINUTES`.
+    A thread can't be killed from outside, so on timeout the scraper is asked to abort
+    (which also kills its browser, if any, to unblock a stuck Playwright call) and the
+    run is reported as failed so the rest of the pipeline - and the summary
+    notification - are never held up by one hung scraper."""
+    timeout_seconds = get_env_int(TIMEOUT_MINUTES_ENV_KEY) * 60
+    box: dict = {}
+
+    def target():
+        try:
+            box['result'] = scraper.run(max_jobs_per_run, start_offset, time_range_hours)
+        except BaseException as exc:  # noqa: BLE001 - re-raised on the calling thread
+            box['error'] = exc
+        finally:
+            connections.close_all()
+
+    thread = threading.Thread(target=target, name=f'scraper-{scraper.name.value}', daemon=True)
+    thread.start()
+    thread.join(timeout_seconds)
+
+    if thread.is_alive():
+        logger.error('run exceeded time limit of %s minutes, aborting', timeout_seconds // 60)
+        scraper.abort()
+        thread.join(ABORT_GRACE_SECONDS)
+        if thread.is_alive():
+            logger.error('scraper thread did not stop within %ss of abort, abandoning it', ABORT_GRACE_SECONDS)
+        raise TimeoutError(f'scraper exceeded time limit of {timeout_seconds // 60} minutes')
+
+    if 'error' in box:
+        raise box['error']
+    return box['result']
+
+
 def run_scraper(scraper: BaseScraper, max_jobs_per_run: int, start_offset: int, time_range_hours: int) -> ScraperRunOutcome:
     """Run a single scraper end-to-end (its own run record and status transitions).
     Runs on its own thread within the pipeline's thread pool so scrapers execute
@@ -71,7 +111,7 @@ def run_scraper(scraper: BaseScraper, max_jobs_per_run: int, start_offset: int, 
         scraper_run_service.mark_processing(run)
         logger.info('run marked Processing')
 
-        result = scraper.run(max_jobs_per_run, start_offset, time_range_hours)
+        result = _run_with_timeout(scraper, logger, max_jobs_per_run, start_offset, time_range_hours)
         metadata = result.metadata
         errors = result.errors
 

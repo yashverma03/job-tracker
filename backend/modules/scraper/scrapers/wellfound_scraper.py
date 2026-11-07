@@ -1,7 +1,12 @@
 import copy
 import json
+import os
 import re
+import signal
+import sys
+import threading
 import time
+from pathlib import Path
 
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
@@ -15,6 +20,7 @@ from modules.scraper.enums.scraper_name import ScraperName
 from modules.scraper.scrapers.registry import register_scraper
 from modules.scraper.types import ListingPage, ScraperJobData
 from modules.scraper.utils.http_session import new_session
+from modules.scraper.utils.scraper_logger import LOG_DIR
 from modules.scraper.utils.text_cleaner import clean_text
 
 LOGIN_URL = 'https://wellfound.com/login'
@@ -61,8 +67,57 @@ REQUEST_DELAY_SECONDS = 3
 NAVIGATION_TIMEOUT_MS = 45000
 BROWSER_LAUNCH_TIMEOUT_MS = 30000
 
+# Hard wall-clock cap on one bootstrap attempt. Individual Playwright calls have their own
+# timeouts, but some calls (and browser startup/shutdown) have none and can block forever,
+# so a watchdog kills the browser once this elapses, turning a silent hang into an error.
+BOOTSTRAP_WATCHDOG_SECONDS = 150
+
 NETWORK_RETRY_INITIAL_DELAY_SECONDS = 5
 NETWORK_RETRY_MAX_TOTAL_WAIT_SECONDS = 120
+
+
+def _playwright_browser_pids() -> list[int]:
+    """PIDs of browser processes spawned by Playwright for *this* process (descendants
+    whose command line points at the ms-playwright cache), found via /proc so the user's
+    own Chrome is never touched."""
+    parent_of: dict[int, int] = {}
+    for entry in os.listdir('/proc'):
+        if not entry.isdigit():
+            continue
+        try:
+            with open(f'/proc/{entry}/stat') as stat_file:
+                stat = stat_file.read()
+            parent_of[int(entry)] = int(stat.rsplit(')', 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            continue
+
+    own_pid = os.getpid()
+    pids = []
+    for pid in parent_of:
+        ancestor = pid
+        while ancestor in parent_of and ancestor != own_pid:
+            ancestor = parent_of[ancestor]
+        if ancestor != own_pid or pid == own_pid:
+            continue
+        try:
+            with open(f'/proc/{pid}/cmdline', 'rb') as cmdline_file:
+                cmdline = cmdline_file.read()
+        except OSError:
+            continue
+        if b'ms-playwright' in cmdline:
+            pids.append(pid)
+    return pids
+
+
+def _kill_playwright_browsers() -> int:
+    killed = 0
+    for pid in _playwright_browser_pids():
+        try:
+            os.kill(pid, signal.SIGKILL)
+            killed += 1
+        except OSError:
+            pass
+    return killed
 
 
 def _is_job_search_request(request) -> bool:
@@ -113,6 +168,10 @@ class WellfoundScraper(BaseScraper):
     def close(self) -> None:
         self._session.close()
 
+    def _on_abort(self) -> None:
+        killed = _kill_playwright_browsers()
+        self._logger.warning('abort requested, killed %s playwright browser process(es)', killed)
+
     def _with_network_retry(self, fn, *args, **kwargs):
         """Retries a Playwright-driven action on transient network/navigation errors
         (connection resets, DNS blips, navigation timeouts) with exponential backoff,
@@ -126,6 +185,8 @@ class WellfoundScraper(BaseScraper):
             try:
                 return fn(*args, **kwargs)
             except PlaywrightError as exc:
+                if self.is_aborted:
+                    raise
                 if elapsed >= NETWORK_RETRY_MAX_TOTAL_WAIT_SECONDS:
                     raise
                 sleep_for = min(delay, NETWORK_RETRY_MAX_TOTAL_WAIT_SECONDS - elapsed)
@@ -140,38 +201,91 @@ class WellfoundScraper(BaseScraper):
                 elapsed += sleep_for
                 delay *= 2
 
+    def _step(self, started_at: float, message: str, *args) -> None:
+        self._logger.info('[bootstrap +%.1fs] ' + message, time.monotonic() - started_at, *args)
+
+    def _dump_page_state(self, page, reason: str) -> None:
+        """Best-effort screenshot + HTML snapshot of whatever the browser is showing, so a
+        stuck login/challenge page can be inspected afterwards."""
+        stamp = time.strftime('%Y%m%d-%H%M%S')
+        base = Path(LOG_DIR) / f'wellfound-{reason}-{stamp}'
+        try:
+            self._logger.error('page state on %s: url=%s title=%s', reason, page.url, page.title())
+            page.screenshot(path=f'{base}.png', timeout=10000)
+            Path(f'{base}.html').write_text(page.content())
+            self._logger.error('saved page snapshot to %s.{png,html}', base)
+        except Exception as exc:  # noqa: BLE001 - diagnostics must never mask the real error
+            self._logger.error('could not capture page state (%s): %s', reason, exc)
+
+    def _attach_page_logging(self, page, started_at: float) -> None:
+        page.on('framenavigated', lambda frame: frame == page.main_frame and self._step(started_at, 'navigated to %s', frame.url))
+        page.on('requestfailed', lambda request: self._step(started_at, 'request failed: %s %s (%s)', request.method, request.url[:150], request.failure))
+        page.on(
+            'response',
+            lambda response: response.status >= 400
+            and self._step(started_at, 'HTTP %s from %s', response.status, response.url[:150]),
+        )
+        page.on('console', lambda message: message.type == 'error' and self._step(started_at, 'console error: %s', message.text[:200]))
+        page.on('pageerror', lambda error: self._step(started_at, 'page error: %s', str(error)[:200]))
+
     def _bootstrap_session(self) -> None:
         email = get_env(EMAIL_ENV_KEY)
         password = get_env(PASSWORD_ENV_KEY)
 
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True, timeout=BROWSER_LAUNCH_TIMEOUT_MS)
-            try:
-                context = browser.new_context()
-                page = context.new_page()
-                page.set_default_timeout(NAVIGATION_TIMEOUT_MS)
+        started_at = time.monotonic()
+        self._step(started_at, 'starting playwright')
+        watchdog = threading.Timer(BOOTSTRAP_WATCHDOG_SECONDS, self._bootstrap_watchdog_fired, args=(started_at,))
+        watchdog.daemon = True
+        watchdog.start()
+        page = None
+        try:
+            with sync_playwright() as playwright:
+                self._step(started_at, 'launching chromium')
+                browser = playwright.chromium.launch(headless=True, timeout=BROWSER_LAUNCH_TIMEOUT_MS)
+                try:
+                    context = browser.new_context()
+                    page = context.new_page()
+                    page.set_default_timeout(NAVIGATION_TIMEOUT_MS)
+                    self._attach_page_logging(page, started_at)
 
-                page.goto(LOGIN_URL, wait_until='load', timeout=NAVIGATION_TIMEOUT_MS)
-                page.fill('input[name=username]', email)
-                page.fill('input[name=password]', password)
-                with page.expect_navigation(timeout=30000):
-                    page.click('input[type=submit]')
+                    self._step(started_at, 'opening login page')
+                    page.goto(LOGIN_URL, wait_until='load', timeout=NAVIGATION_TIMEOUT_MS)
+                    self._step(started_at, 'login page loaded, filling credentials')
+                    page.fill('input[name=username]', email)
+                    page.fill('input[name=password]', password)
+                    self._step(started_at, 'submitting login form')
+                    with page.expect_navigation(timeout=30000):
+                        page.click('input[type=submit]')
+                    self._step(started_at, 'login submitted, url=%s', page.url)
 
-                session_cookie = next(
-                    (cookie.get('value') for cookie in context.cookies() if cookie.get('name') == SESSION_COOKIE_NAME),
-                    None,
-                )
-                if session_cookie is None:
-                    raise RuntimeError('Wellfound login failed: no session cookie set after login attempt')
+                    session_cookie = next(
+                        (
+                            cookie.get('value')
+                            for cookie in context.cookies()
+                            if cookie.get('name') == SESSION_COOKIE_NAME
+                        ),
+                        None,
+                    )
+                    if session_cookie is None:
+                        raise RuntimeError('Wellfound login failed: no session cookie set after login attempt')
+                    self._step(started_at, 'got session cookie, opening jobs page')
 
-                with page.expect_request(_is_job_search_request, timeout=NAVIGATION_TIMEOUT_MS) as request_info:
-                    page.goto(JOBS_URL, wait_until='load', timeout=NAVIGATION_TIMEOUT_MS)
-                search_request = request_info.value
-                signature = search_request.all_headers().get('x-apollo-signature')
-                if not signature:
-                    raise RuntimeError('Wellfound job search request had no x-apollo-signature header')
-            finally:
-                browser.close()
+                    with page.expect_request(_is_job_search_request, timeout=NAVIGATION_TIMEOUT_MS) as request_info:
+                        page.goto(JOBS_URL, wait_until='load', timeout=NAVIGATION_TIMEOUT_MS)
+                    self._step(started_at, 'captured job search request')
+                    search_request = request_info.value
+                    signature = search_request.all_headers().get('x-apollo-signature')
+                    if not signature:
+                        raise RuntimeError('Wellfound job search request had no x-apollo-signature header')
+                finally:
+                    if page is not None and sys.exc_info()[0] is not None:
+                        self._dump_page_state(page, 'bootstrap-failed')
+                    self._step(started_at, 'closing browser')
+                    browser.close()
+                    self._step(started_at, 'browser closed')
+            self._step(started_at, 'playwright stopped')
+        finally:
+            watchdog.cancel()
 
         self._session.cookies.clear()
         self._session.cookies.set(SESSION_COOKIE_NAME, session_cookie, domain='wellfound.com')
@@ -182,6 +296,14 @@ class WellfoundScraper(BaseScraper):
             'referer': JOBS_URL,
         }
         self._logger.info('logged into Wellfound as %s', email)
+
+    def _bootstrap_watchdog_fired(self, started_at: float) -> None:
+        killed = _kill_playwright_browsers()
+        self._logger.error(
+            'bootstrap still running after %ss, killed %s playwright browser process(es) to unblock it',
+            BOOTSTRAP_WATCHDOG_SECONDS,
+            killed,
+        )
 
     def _throttled(self, send):
         time.sleep(REQUEST_DELAY_SECONDS)
