@@ -117,11 +117,7 @@ DATABASES = {
         'PASSWORD': get_env('POSTGRES_PASSWORD'),
         'HOST': get_env('POSTGRES_HOST'),
         'PORT': get_env('POSTGRES_PORT'),
-        'CONN_MAX_AGE': 0,
-        'OPTIONS': {
-            # Per-process pool: caps connections per runserver/qcluster process so bursts queue instead of exhausting Postgres.
-            'pool': {'min_size': 2, 'max_size': 15, 'timeout': 30},
-        },
+        'CONN_MAX_AGE': 60,
     }
 }
 
