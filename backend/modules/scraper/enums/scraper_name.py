@@ -32,3 +32,8 @@ class ScraperName(models.TextChoices):
     BROWSERSTACK = 'BrowserStack', 'BrowserStack'
     FLIPKART = 'Flipkart', 'Flipkart'
     VISA = 'Visa', 'Visa'
+    BANK_OF_AMERICA = 'Bank of America', 'Bank of America'
+    SALESFORCE = 'Salesforce', 'Salesforce'
+    AIRBNB = 'Airbnb', 'Airbnb'
+    ATLASSIAN = 'Atlassian', 'Atlassian'
+    DOORDASH = 'DoorDash', 'DoorDash'
