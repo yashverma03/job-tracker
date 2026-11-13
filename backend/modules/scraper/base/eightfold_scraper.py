@@ -51,7 +51,17 @@ class EightfoldScraper(ApiScraper):
 
     @property
     def location(self) -> str:
+        """Free-text `location` param. Return '' to omit it, for tenants that scope
+        location through `extra_filters` (e.g. a `country` facet) instead."""
         return 'India'
+
+    @property
+    def extra_filters(self) -> dict[str, list[str]]:
+        """Any other `filter_<name>` facets a tenant uses (e.g. Morgan Stanley's
+        `{'businessarea': [...], 'pcsjoblevel': [...], 'country': [...]}`), as
+        `{name: [values]}` - each is sent as a repeated `filter_<name>` param. Override
+        per tenant; empty means none."""
+        return {}
 
     @property
     def include_remote(self) -> bool:
@@ -94,17 +104,20 @@ class EightfoldScraper(ApiScraper):
         params = {
             'domain': self.domain,
             'query': '',
-            'location': self.location,
             'start': start,
             'sort_by': 'timestamp',
             'filter_include_remote': '1' if self.include_remote else '0',
         }
+        if self.location:
+            params['location'] = self.location
         if self.departments:
             params['filter_department'] = list(self.departments)
         if self.job_categories:
             params['filter_job_category'] = list(self.job_categories)
         if self.seniority_levels:
             params['filter_seniority'] = list(self.seniority_levels)
+        for filter_name, values in self.extra_filters.items():
+            params[f'filter_{filter_name}'] = list(values)
         return params
 
     def parse_list_items(self, response_json: dict) -> list[dict]:
