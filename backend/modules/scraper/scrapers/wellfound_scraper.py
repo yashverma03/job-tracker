@@ -50,7 +50,7 @@ JOB_SEARCH_REQUEST_BODY = {
             ],
             'equity': {'min': None, 'max': None},
             'includeJobsWithoutExperience': True,
-            'jobTypes': ['full_time'],
+            'jobTypes': ['full_time', 'contract'],
             'excludedKeywords': ['Staff software', 'Lead software', 'SDET'],
             'includeJobsWithoutSalary': True,
             'remotePreference': 'REMOTE_OPEN',

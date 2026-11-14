@@ -13,7 +13,10 @@ APPLIED_FACETS = {
         'f5811cef9cb5018463377f3f550a1bf2',  # Engineering <FU-EN>
         'f5811cef9cb5015323ad7f3f550a1df2',  # Digital <FU-IM>
     ],
-    'workerSubType': ['f5811cef9cb501a69768a71d470a6d15'],  # Regular
+    'workerSubType': [
+        'f5811cef9cb501a69768a71d470a6d15',  # Regular
+        'f5811cef9cb5012aaf57ecb1470a8318',  # Temporary
+    ],
     'FullPartTime': ['70a157281071017ad8c0ee4170448100'],  # Full time
     'jobFamily': [
         'f5811cef9cb501602cf214e9540adaec',  # Digital <JF-IM-DI>

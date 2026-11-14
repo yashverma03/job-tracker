@@ -30,7 +30,6 @@ DEFAULT_SEARCH_FILTERS = {
     'keywords': 'software',
     'location': 'India',
     'f_E': '2,3,4',
-    'f_JT': 'F',
 }
 
 

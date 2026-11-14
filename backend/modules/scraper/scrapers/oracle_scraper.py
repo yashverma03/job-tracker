@@ -7,7 +7,7 @@ SITE_NUMBER = 'CX_45001'
 COMPANY_NAME = 'Oracle'
 JOB_URL_TEMPLATE = 'https://careers.oracle.com/en/sites/jobsearch/job/{job_id}'
 
-SELECTED_FLEX_FIELDS_FACETS = 'AttributeChar4|Employee||AttributeChar29|Individual Contributor||AttributeChar6|3 to 5+ years'
+SELECTED_FLEX_FIELDS_FACETS = 'AttributeChar4|Employee;Contractor;Temp||AttributeChar29|Individual Contributor||AttributeChar6|3 to 5+ years'
 SELECTED_LOCATIONS_FACET = '300000000106947'
 SELECTED_POSTING_DATES_FACET = '2'
 

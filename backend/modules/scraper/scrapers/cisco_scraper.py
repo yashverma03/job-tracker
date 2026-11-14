@@ -12,7 +12,11 @@ APPLIED_FACETS = {
         '2101eee3ea96016aef42a674fc016429',  # Engineering
         '2101eee3ea96017b1ceba674fc016829',  # Information Technology
     ],
-    'workerSubType': ['a5e1942e7b2c01f937db30106001b800'],  # Regular
+    'workerSubType': [
+        'a5e1942e7b2c01f937db30106001b800',  # Regular
+        '2101eee3ea960156500e5ea95f011a03',  # Temporary
+        'a5e1942e7b2c0174bbde2f106001b600',  # Fixed Term
+    ],
     'timeType': ['672880041e5001a878ea77353f075800'],  # Full time
     'locations': [
         '662e524adea41001f4d0bd5a1ddd0000',  # Bangalore, India
