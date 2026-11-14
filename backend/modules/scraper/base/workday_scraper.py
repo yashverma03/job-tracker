@@ -6,6 +6,9 @@ from modules.scraper.types import ScraperJobData
 from modules.scraper.utils.text_cleaner import clean_text
 
 
+WORKDAY_MAINTENANCE_URL_MARKER = 'community.workday.com/maintenance-page'
+
+
 class WorkdayScraper(ApiScraper):
     """Base for scrapers targeting a Workday-hosted careers site (`*.myworkdayjobs.com`).
     Many companies (Adobe included) run their external career site on Workday, sharing
@@ -33,6 +36,18 @@ class WorkdayScraper(ApiScraper):
     @abstractmethod
     def company_name(self) -> str:
         """Display name to store on the job, e.g. 'Adobe'."""
+
+    def _parse_json(self, response) -> dict:
+        # During a Workday outage the API 303-redirects to a static maintenance page,
+        # which `requests` follows and which would otherwise surface as a misleading
+        # "bot-block" invalid-JSON error. Report the real cause instead.
+        urls = [response.url, *(r.headers.get('Location', '') for r in response.history)]
+        if any(WORKDAY_MAINTENANCE_URL_MARKER in (url or '') for url in urls):
+            raise ValueError(
+                f'Workday is under maintenance (redirected to {WORKDAY_MAINTENANCE_URL_MARKER}); '
+                f'host={self.workday_host} status={response.status_code}'
+            )
+        return super()._parse_json(response)
 
     @property
     def applied_facets(self) -> dict:
