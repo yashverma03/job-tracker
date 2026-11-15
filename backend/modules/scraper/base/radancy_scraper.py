@@ -89,7 +89,7 @@ class RadancyScraper(ApiScraper):
         items = []
         for link in soup.select('a[data-job-id]'):
             container = link.find_parent('li') or link.parent
-            location_el = container.select_one('[class*="job-location"]') if container else None
+            location_el = container.select_one('[class*="job-location"], [class*="result-location"]') if container else None
             # Title markup varies per tenant: some put the title text directly inside
             # the link; others wrap the link in a title element instead and nest the
             # location element inside the link alongside a title element of its own.
@@ -99,6 +99,8 @@ class RadancyScraper(ApiScraper):
             direct_text = link.find(string=True, recursive=False)
             if direct_text and direct_text.strip():
                 title = direct_text.strip()
+            elif (title_el := link.select_one('[class*="job-title"]')) is not None:
+                title = title_el.get_text(strip=True)
             else:
                 child_texts = [
                     child.get_text(strip=True) for child in link.find_all(recursive=False) if child is not location_el
