@@ -18,7 +18,10 @@ APPLIED_FACETS = {
         'aa461b8bce6b1001be47390fa4fd0000',  # Data Management & Product
         '6cee717ed86e0100b3251f75aca70001',  # Information Security Operations
     ],
-    'workerSubType': ['2d264dd4beb00100f05a7cc5745b0001'],  # Regular
+    'workerSubType': [
+        '2d264dd4beb00100f05a7cc5745b0001',  # Regular
+        '2d264dd4beb00100f05a7cc5745b0002',  # Fixed Term
+    ],
     'timeType': ['50c5418d15190102da8c58e585d90001'],  # Full time
     'locationCountry': ['c4f78be1a8f14da0ab49ce1162348a5e'],  # India
 }
