@@ -120,6 +120,7 @@ class LinkedInScraper(BaseScraper):
     def _fetch_listing_html(self, start: int, time_range_hours: int) -> str:
         time_range_seconds = time_range_hours * SECONDS_PER_HOUR
         params = {**DEFAULT_SEARCH_FILTERS, 'f_TPR': f'r{time_range_seconds}', 'start': start}
+        wait_between_requests()
         response = self._listing_lane.request(
             LISTING_URL,
             params=params,
