@@ -12,7 +12,11 @@ def run_job_scoring() -> None:
     """Runs the job-scoring skill (which scores every Pending job via the API and
     persists the results itself) then, once it succeeds, queues resume generation for
     whichever jobs now qualify."""
-    run_claude_skill(JOB_SCORING_SKILL_COMMAND)
+    try:
+        run_claude_skill(JOB_SCORING_SKILL_COMMAND)
+    except Exception as error:
+        NotificationManager.show('Job scoring failed', str(error))
+        raise
     NotificationManager.show('Job scoring complete', 'Job scoring finished successfully.')
     generate_resumes_for_pending_jobs()
 
