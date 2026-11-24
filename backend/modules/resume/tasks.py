@@ -7,9 +7,4 @@ def run_resume_generation_task(job_id: int | None = None) -> None:
     """Runs the job-resume-generation skill, which tailors resume content via the API, persists it, and triggers
     PDF generation itself. With a job_id it (re)generates just that job, otherwise every eligible job."""
     skill_command = RESUME_GENERATION_SKILL_COMMAND if job_id is None else f'{RESUME_GENERATION_SKILL_COMMAND} {job_id}'
-    try:
-        run_claude_skill(skill_command)
-    except Exception as error:
-        NotificationManager.show('Resume generation failed', str(error))
-        raise
-    NotificationManager.show('Resume generation complete', 'Resume generation finished successfully.')
+    NotificationManager.run_with_notification('Resume generation', lambda: run_claude_skill(skill_command))

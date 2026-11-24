@@ -1,6 +1,10 @@
 import logging
 import os
 import subprocess
+import time
+from collections.abc import Callable
+
+from common.utils.duration import format_duration
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +36,19 @@ class NotificationManager:
         for row in rows:
             command += [str(cell) for cell in row]
         NotificationManager._run(command, width, height)
+
+    @staticmethod
+    def run_with_notification(label: str, action: Callable[[], None]) -> None:
+        """Runs `action` and shows a single "<label> complete" notification with the elapsed time,
+        or "<label> failed" (re-raising) if it raises."""
+        started_at = time.time()
+        try:
+            action()
+        except Exception as error:
+            NotificationManager.show(f'{label} failed', str(error))
+            raise
+        duration = format_duration(time.time() - started_at)
+        NotificationManager.show(f'{label} complete', f'{label} finished successfully in {duration}.')
 
     @staticmethod
     def _run(command: list[str], width: int | None, height: int | None) -> None:

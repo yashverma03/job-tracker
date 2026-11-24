@@ -1,11 +1,13 @@
 import os
 import signal
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from django.db import connections
 from django_q.tasks import async_task
 
+from common.utils.duration import format_duration
 from common.utils.env import get_env_int
 from common.utils.notification_manager import NotificationManager
 from modules.ai_scoring.services.job_scoring_service import trigger_job_scoring
@@ -157,6 +159,7 @@ def run_scraper_pipeline(
     if scraper_names is not None:
         scrapers = [scraper for scraper in scrapers if scraper.name in scraper_names]
 
+    started_at = time.time()
     concurrent_limit = get_env_int(CONCURRENT_SCRAPER_LIMIT_ENV_KEY)
 
     previous_handlers = {sig: signal.signal(sig, _handle_termination_signal) for sig in _TERMINATION_SIGNALS}
@@ -171,13 +174,13 @@ def run_scraper_pipeline(
         for sig, previous_handler in previous_handlers.items():
             signal.signal(sig, previous_handler)
 
-    _notify_pipeline_summary(outcomes)
+    _notify_pipeline_summary(outcomes, time.time() - started_at)
 
     if run_scoring and outcomes and all(outcome.status == 'success' for outcome in outcomes):
         trigger_job_scoring()
 
 
-def _notify_pipeline_summary(outcomes: list[ScraperRunOutcome]) -> None:
+def _notify_pipeline_summary(outcomes: list[ScraperRunOutcome], duration_seconds: float) -> None:
     rows = [
         [
             outcome.scraper_name.label,
@@ -199,7 +202,7 @@ def _notify_pipeline_summary(outcomes: list[ScraperRunOutcome]) -> None:
     )
 
     NotificationManager.show_table(
-        'Scraper pipeline complete',
+        f'Scraper pipeline complete in {format_duration(duration_seconds)}',
         ['Name', 'Total Count', 'Added', 'Failed', 'Status'],
         rows,
         width=900,

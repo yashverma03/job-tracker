@@ -43,6 +43,10 @@ def _eligible_job_count() -> int:
     return list_jobs(filters).total
 
 
+def has_jobs_pending_resume_generation() -> bool:
+    return _eligible_job_count() > 0
+
+
 def _generation_in_progress() -> bool:
     return Task.objects.filter(group=RESUME_GENERATION_TASK_GROUP, stopped__isnull=True).exists()
 
